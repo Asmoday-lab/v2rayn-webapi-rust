@@ -69,16 +69,29 @@ semantic_hotspots:
     note: PropertyNameCaseInsensitive=true on backup restore; C# keeps last duplicate. Nova commits fbe6134/625c65d exist solely to match this.
   - id: session
     source: Security/WebAuthService.cs
-    note: 32B base64url session; sliding 7d / absolute 30d; login rate limit 5/min.
+    status: covered-by-differential
+    note: '32B base64url session; SHA-256 digest storage; sliding 7d / absolute 30d; login rate limit 5/min; PBKDF2 env-key verification. Covered by login wrong/empty/valid + unauthenticated cases.'
   - id: sse-ticket
     source: Api/WebApiEndpoints.cs
-    note: one-shot 45s ticket for /api/events.
+    status: covered-by-differential
+    note: 'one-shot 45s ticket for /api/events via query param. Middleware consumes ticket; covered by no-ticket/bogus-ticket 401 + authenticated minting cases.'
   - id: setup-loopback
     source: Api/WebSetupEndpoints.cs
+    status: ported
     note: loopback + same-origin + no forwarded headers; 10/min rate limit.
   - id: cors-origin-guard
     source: Security/WebCorsPolicy.cs
-    note: exact origin allowlist; middleware order matters; 64KiB body cap.
+    status: covered-by-differential
+    note: 'exact origin allowlist + browser Sec-Fetch-Site same-origin; middleware order (headers→body-limit→routing→origin→cors→rate-limit→session); 64KiB body cap. Foreign-origin 403 case covered.'
   - id: capabilities
     source: Contracts/WebApiCapabilities.cs
-    note: 12 items incl. core.updates + WebAPI.self-update — Termux build must not silently drop these.
+    status: covered-by-differential
+    note: '12 items incl. core.updates + WebAPI.self-update; returned verbatim in /api/status and compared by differential (runtime diagnostic fields normalized).'
+  - id: random-entity-ids
+    source: ServiceLib (Utils.GetId)
+    status: normalized-in-differential
+    note: 'C# emits a fresh 19-digit long per entity on every start (dns/routing profiles, core templates). Normalize id/Id fields and embedded JSON ruleSet before compare.'
+  - id: static-dto-shapes
+    source: Api/WebApiEndpoints.cs (golden sample)
+    status: covered-by-differential
+    note: '16 GET endpoints served from resources/*.json captured from the pinned oracle; re-captured each CI run as oracle-golden-sample artifact for drift detection.'

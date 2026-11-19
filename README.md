@@ -4,18 +4,23 @@ Headless WebAPI for Termux, contract-compatible with [v2rayN.WebAPI](https://git
 
 ## Scope (current milestone)
 
-This is the **skeleton milestone**: CI toolchain is being brought up green before business logic is ported.
+Contract-compatible headless WebAPI for Termux. Every implemented endpoint is verified
+byte-for-byte against the pinned C# oracle in CI.
 
 - [x] Independent repo, does not touch the upstream v2rayN repository
 - [x] x64 CI: fmt / clippy (`-D warnings`) / tests / dependency guard
 - [x] aarch64-unknown-linux-musl static release build in CI (zig + cargo-zigbuild), verified `statically linked` and no `INTERP`
 - [x] `oracle.lock` pins both upstream C# and Nova commits; daily drift watch opens a PR instead of silently advancing the pin
-- [x] `/api/health` body matches the C# contract `{"status":"ok"}` and emits the 5 diagnostic headers only for a local, same-origin, non-forwarded probe (mirrors `WebSetupAccessPolicy` + `WebCorsPolicy.IsSameOriginRequest`)
 - [x] dependency graph guard: no `aws-lc-rs` / `openssl-sys` / `rusqlite` / native-tls
-- [x] differential test against the pinned C# oracle: headless startup + health body/header-set comparison (2 cases) runs in CI on x64
+- [x] Full C# security chain: security headers, 64 KiB body cap, Origin guard (403), fixed-window rate limit, Bearer session auth, one-shot SSE ticket auth
+- [x] Auth/session endpoints: login (PBKDF2-verified key), logout, sse-ticket, setup/status, setup
+- [x] `/api/health` with the exact 5 diagnostic headers under `WebSetupAccessPolicy`
+- [x] 16 static/near-static GET endpoints (status, editor-options, settings + dns, profile-groups, core/web-updates, operations, subscriptions, profiles…) with data captured from the oracle golden sample and embedded as JSON resources
+- [x] SSE `/api/events` (heartbeat stream, one-shot ticket auth)
+- [x] Differential suite: **29/29 cases match** the pinned C# oracle in CI, including auth, CORS 403, session, SSE ticket, and all static endpoints
+- [x] Oracle golden-sample dump uploaded as a CI artifact for DTO parity
 - [ ] Core process management (Xray + sing-box)
-- [ ] Profile/subscription/settings endpoints (93 REST + 1 SSE)
-- [ ] Remaining differential cases (auth/CORS 403, session, SSE ticket, settings/profiles)
+- [ ] State-mutating endpoints (profiles/subscriptions/settings POST/PUT/DELETE, backup, updates) — currently read-only + auth surface only
 - [ ] Termux DNS / CA / wakelock adaptation
 
 ## Differential test
@@ -36,9 +41,14 @@ To reproduce locally you need `dotnet` 10.x installed (CI has it via `setup-dotn
 bash scripts/differential.sh "$PWD/oracle-src"
 ```
 
-The current corpus covers only `/api/health` because it is the sole endpoint that needs
-no auth, Core, or data files. A foreign `Origin` case is deferred until the
-`WebOriginGuardMiddleware` (403) is ported — tracked in `contract.yaml`.
+The corpus currently has 29 cases: health (plain / forwarded / foreign-origin-403),
+setup-status, login (wrong / empty / valid key), unauthenticated rejections, all
+16 static GET endpoints, SSE no-ticket / bogus-ticket 401, and authenticated
+sse-ticket minting. Volatile values (session/ticket tokens, timestamps, random
+entity ids, environment diagnostic strings) are normalized before comparing.
+A per-run golden sample of all GET endpoints is uploaded as the
+`oracle-golden-sample` artifact and is the authoritative source for the embedded
+DTO resources in `resources/`.
 
 ## Local vs CI compilation policy
 
