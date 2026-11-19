@@ -101,6 +101,15 @@ pub async fn profiles_copy() -> Response {
     invalid("profile_not_found", "profiles.notFound")
 }
 
+/// `POST /api/speedtests` on a fresh install with no profiles to test.
+/// Nova routes every ping/speed test through this endpoint (not `/latency`).
+pub async fn speedtests_start() -> Response {
+    invalid(
+        "speedtest_profile_selection_required",
+        "speedtest.selectRequired",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,6 +133,10 @@ mod tests {
             ),
             (generate_regions_groups().await, "subscription_not_found"),
             (profiles_copy().await, "profile_not_found"),
+            (
+                speedtests_start().await,
+                "speedtest_profile_selection_required",
+            ),
         ];
         for (resp, expected_code) in cases {
             assert!(resp.status().is_client_error());

@@ -184,6 +184,42 @@ def compare_health(oracle: Response, rust: Response, case: Case) -> list[str]:
     return compare_default(oracle, rust, case)
 
 
+def compare_logs_page_shape(oracle: Response, rust: Response, case: Case) -> list[str]:
+    """Log records are process-local, so compare the envelope and pagination
+    contract rather than the (necessarily different) log content."""
+    diffs: list[str] = []
+    if oracle.status != rust.status:
+        diffs.append(f"status: oracle={oracle.status} rust={rust.status}")
+    for name, expected in SECURITY_HEADERS.items():
+        o = (oracle.headers.get(name) or "").lower()
+        r = (rust.headers.get(name) or "").lower()
+        if o != expected or r != expected:
+            diffs.append(f"{name}: oracle={o!r} rust={r!r} expected={expected!r}")
+    for label, resp in (("oracle", oracle), ("rust", rust)):
+        body = resp.body
+        if not isinstance(body, dict):
+            diffs.append(f"{label} body is not an object: {body!r}")
+            continue
+        for key, expected in (
+            ("success", True),
+            ("code", "ok"),
+            ("messageKey", "logs.loaded"),
+        ):
+            if body.get(key) != expected:
+                diffs.append(f"{label} {key}: {body.get(key)!r} != {expected!r}")
+        data = body.get("data")
+        if not isinstance(data, dict):
+            diffs.append(f"{label} data is not an object: {data!r}")
+            continue
+        if not isinstance(data.get("items"), list):
+            diffs.append(f"{label} data.items is not a list")
+        for key in ("page", "pageSize", "total", "totalPages"):
+            value = data.get(key)
+            if not isinstance(value, int) or isinstance(value, bool):
+                diffs.append(f"{label} data.{key} is not an int: {value!r}")
+    return diffs
+
+
 def json_body(obj: object) -> bytes:
     return json.dumps(obj, separators=(",", ":")).encode()
 
@@ -279,6 +315,8 @@ CORPUS: list[Case] = [
     Case(name="get/settings-core-templates", method="GET", path="/api/settings/core-templates", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="get/core-updates", method="GET", path="/api/core-updates", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="get/core-updates-progress", method="GET", path="/api/core-updates/progress", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="get/web-updates", method="GET", path="/api/web-updates", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="get/logs-page-shape", method="GET", path="/api/logs/page?page=1&pageSize=100&filter=", headers={"Host": "127.0.0.1:PORT"}, auth=True, compare=compare_logs_page_shape),
     # ---- SSE authentication (no-ticket path only; a valid ticket opens a
     # long-lived stream which the harness must not wait on) ----
     Case(
@@ -330,6 +368,7 @@ CORPUS: list[Case] = [
     Case(name="val/routing-import-url-missing-profile", method="POST", path="/api/settings/routing-profiles/__missing__/rules/import-url", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({}), auth=True),
     Case(name="val/generate-regions-missing-sub", method="POST", path="/api/profile-groups/generate/regions?subscriptionId=__missing__", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="val/profiles-copy-empty-ids", method="POST", path="/api/profiles/copy", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"profileIds": []}), auth=True),
+    Case(name="val/speedtests-no-profiles", method="POST", path="/api/speedtests", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"action": "tcping", "profileIds": []}), auth=True),
 ]
 
 

@@ -81,6 +81,8 @@ async fn main() {
             "/api/core-updates/progress",
             get(endpoints::core_update_progress),
         )
+        .route("/api/web-updates", get(endpoints::web_updates))
+        .route("/api/logs/page", get(endpoints::logs_page))
         .route("/api/events", get(events::events))
         // Deterministic write operations on a fresh/headless install.
         .route("/api/logs", delete(mutations::clear_logs))
@@ -142,6 +144,7 @@ async fn main() {
             post(validation::generate_regions_groups),
         )
         .route("/api/profiles/copy", post(validation::profiles_copy))
+        .route("/api/speedtests", post(validation::speedtests_start))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,

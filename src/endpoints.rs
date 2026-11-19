@@ -59,6 +59,25 @@ pub async fn core_update_progress() -> Response {
     )
 }
 
+/// Nova's maintenance page loads this unconditionally. Its data is build
+/// metadata, stable on the pinned oracle (no per-run ids or timestamps).
+pub async fn web_updates() -> Response {
+    ok(
+        static_data(include_str!("../resources/web_updates.json")),
+        "maintenance.updatesLoaded",
+    )
+}
+
+/// Nova loads `/api/logs/page` on every authenticated shell startup.
+/// Log *content* is process-local and cannot be a fixed golden; an empty page
+/// is returned so the log view renders instead of raising a 404.
+pub async fn logs_page() -> Response {
+    ok(
+        static_data(include_str!("../resources/logs_page.json")),
+        "logs.loaded",
+    )
+}
+
 pub async fn editor_options() -> Response {
     ok(
         static_data(include_str!("../resources/editor_options.json")),
