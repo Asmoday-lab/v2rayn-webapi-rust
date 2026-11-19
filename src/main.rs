@@ -7,6 +7,7 @@
 
 mod auth;
 mod endpoints;
+mod events;
 mod security;
 mod session;
 mod state;
@@ -75,6 +76,7 @@ async fn main() {
             "/api/core-updates/progress",
             get(endpoints::core_update_progress),
         )
+        .route("/api/events", get(events::events))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,

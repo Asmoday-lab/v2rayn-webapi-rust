@@ -21,6 +21,8 @@ hmac = "0.12"
 # Pure-Rust CSPRNG; works on Linux (getrandom syscall) and Windows (dev tests).
 # No C toolchain — safe for static musl cross-builds.
 getrandom = "0.3"
+# SSE heartbeat stream (pure Rust, no C toolchain).
+tokio-stream = { version = "0.1", features = ["time"] }
 
 [profile.release]
 opt-level = "z"

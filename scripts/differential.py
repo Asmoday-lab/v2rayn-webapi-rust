@@ -275,6 +275,30 @@ CORPUS: list[Case] = [
     Case(name="get/settings-core-templates", method="GET", path="/api/settings/core-templates", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="get/core-updates", method="GET", path="/api/core-updates", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="get/core-updates-progress", method="GET", path="/api/core-updates/progress", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    # ---- SSE authentication (no-ticket path only; a valid ticket opens a
+    # long-lived stream which the harness must not wait on) ----
+    Case(
+        name="events/no-ticket-401",
+        method="GET",
+        path="/api/events",
+        headers={"Host": "127.0.0.1:PORT"},
+        expect_diagnostics=False,
+    ),
+    Case(
+        name="events/bogus-ticket-401",
+        method="GET",
+        path="/api/events?sse_ticket=notavalidticket",
+        headers={"Host": "127.0.0.1:PORT"},
+        expect_diagnostics=False,
+    ),
+    # ---- authenticated SSE ticket minting (random ticket normalized) ----
+    Case(
+        name="auth/sse-ticket/valid-200",
+        method="POST",
+        path="/api/auth/sse-ticket",
+        headers={"Host": "127.0.0.1:PORT"},
+        auth=True,
+    ),
 ]
 
 

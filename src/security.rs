@@ -112,8 +112,21 @@ pub async fn security_middleware(
         return response;
     }
 
-    // 4. Session authentication.
-    if path.starts_with("/api") && !AUTH_EXEMPT.contains(&path.as_str()) {
+    // 4. Session authentication. `/api/events` is special: it authenticates with
+    // a one-shot SSE ticket from the query string, not a Bearer token
+    // (WebSessionAuthenticationMiddleware.cs:10-23).
+    if path == "/api/events" {
+        let ticket = query_param(request.uri().query(), "sse_ticket").unwrap_or_default();
+        if !state.sessions.consume_sse_ticket(ticket) {
+            let mut response = fail_response(
+                StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "errors.unauthorized",
+            );
+            add_security_headers(&mut response);
+            return response;
+        }
+    } else if path.starts_with("/api") && !AUTH_EXEMPT.contains(&path.as_str()) {
         let presented = extract_bearer(&headers);
         if !state.sessions.validate_and_renew(&presented) {
             let mut response = fail_response(
@@ -164,6 +177,15 @@ pub fn extract_bearer(headers: &HeaderMap) -> String {
             }
         })
         .unwrap_or_default()
+}
+
+/// Extract a single query parameter value (first occurrence) from a raw query.
+fn query_param<'a>(query: Option<&'a str>, name: &str) -> Option<&'a str> {
+    let query = query?;
+    query.split('&').find_map(|pair| {
+        let (key, value) = pair.split_once('=')?;
+        if key == name { Some(value) } else { None }
+    })
 }
 
 /// Mirror `WebOriginGuardMiddleware`: allow when the request is same-origin,
