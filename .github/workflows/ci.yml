@@ -89,9 +89,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: differential-logs
-          path: |
-            /tmp/tmp.*/oracle.log
-            /tmp/tmp.*/rust.log
+          path: ci-logs/
           if-no-files-found: ignore
 
   # Job 2: the only CI-only compilation — the shipping aarch64-musl static

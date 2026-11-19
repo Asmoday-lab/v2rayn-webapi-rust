@@ -17,10 +17,10 @@ byte-for-byte against the pinned C# oracle in CI.
 - [x] `/api/health` with the exact 5 diagnostic headers under `WebSetupAccessPolicy`
 - [x] 16 static/near-static GET endpoints (status, editor-options, settings + dns, profile-groups, core/web-updates, operations, subscriptions, profiles…) with data captured from the oracle golden sample and embedded as JSON resources
 - [x] SSE `/api/events` (heartbeat stream, one-shot ticket auth)
-- [x] Differential suite: **29/29 cases match** the pinned C# oracle in CI, including auth, CORS 403, session, SSE ticket, and all static endpoints
-- [x] Oracle golden-sample dump uploaded as a CI artifact for DTO parity
+- [x] Differential suite: **54/54 cases match** the pinned C# oracle in CI, including auth, CORS 403, session, SSE ticket, all static endpoints, deterministic headless write operations, and validation error paths
+- [x] Oracle golden-sample dump (GET data + `__mutations__` write responses) uploaded as a CI artifact for DTO parity
 - [ ] Core process management (Xray + sing-box)
-- [ ] State-mutating endpoints (profiles/subscriptions/settings POST/PUT/DELETE, backup, updates) — currently read-only + auth surface only
+- [ ] Real state mutation (profiles/subscriptions/settings persistence, backup, update triggers) — currently only the headless-deterministic no-op/error paths are implemented
 - [ ] Termux DNS / CA / wakelock adaptation
 
 ## Differential test
@@ -41,14 +41,21 @@ To reproduce locally you need `dotnet` 10.x installed (CI has it via `setup-dotn
 bash scripts/differential.sh "$PWD/oracle-src"
 ```
 
-The corpus currently has 29 cases: health (plain / forwarded / foreign-origin-403),
+The corpus currently has 54 cases: health (plain / forwarded / foreign-origin-403),
 setup-status, login (wrong / empty / valid key), unauthenticated rejections, all
-16 static GET endpoints, SSE no-ticket / bogus-ticket 401, and authenticated
-sse-ticket minting. Volatile values (session/ticket tokens, timestamps, random
-entity ids, environment diagnostic strings) are normalized before comparing.
-A per-run golden sample of all GET endpoints is uploaded as the
-`oracle-golden-sample` artifact and is the authoritative source for the embedded
-DTO resources in `resources/`.
+16 static GET endpoints, SSE no-ticket / bogus-ticket 401, authenticated
+sse-ticket minting, 11 deterministic write operations captured in the oracle's
+`__mutations__` golden sample, and 13 input-validation failures transcribed from
+the pinned C# `V2rayRuntime.*.cs` sources. Volatile values (session/ticket tokens,
+timestamps, random entity ids, log-clear generation counters, environment
+diagnostic strings) are normalized before comparing. A per-run golden sample is
+uploaded as the `oracle-golden-sample` artifact and is the authoritative source
+for the embedded DTO resources in `resources/`.
+
+Operations that spawn Core processes, network downloads or real file writes are
+deliberately **excluded** from the corpus (e.g. `/api/core-updates/batch`, whose
+`apply=false` still launches `RunSelectedCoreUpdateBatchAsync`). See the
+`unsafe-update-ops-excluded` hotspot in `contract.yaml` before adding a case.
 
 ## Local vs CI compilation policy
 

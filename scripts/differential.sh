@@ -69,10 +69,12 @@ echo "$rust_pid" >"$tmp/rust.pid"
 wait_health "http://127.0.0.1:$rust_port" "rust" "$rust_pid" "$tmp/rust.log"
 
 echo "=== running differential corpus ==="
+# `set -e` would otherwise abort before the golden dump and log tails below,
+# which are exactly the diagnostics needed when the suite fails.
+result=0
 python3 "$root/scripts/differential.py" \
   --oracle "http://127.0.0.1:$oracle_port" \
-  --rust "http://127.0.0.1:$rust_port"
-result=$?
+  --rust "http://127.0.0.1:$rust_port" || result=$?
 
 echo "=== differential result: $result ==="
 
@@ -84,6 +86,10 @@ python3 "$root/scripts/dump-oracle.py" \
   --out "$root/oracle-dump.json" || echo "dump failed (non-fatal)"
 
 if [[ "$result" -ne 0 ]]; then
+  # The trap removes $tmp, so copy logs to a stable location for the artifact.
+  mkdir -p "$root/ci-logs"
+  cp "$tmp/oracle.log" "$root/ci-logs/oracle.log" 2>/dev/null || true
+  cp "$tmp/rust.log" "$root/ci-logs/rust.log" 2>/dev/null || true
   echo "--- oracle log tail ---" >&2
   tail -n 40 "$tmp/oracle.log" >&2 || true
   echo "--- rust log tail ---" >&2
