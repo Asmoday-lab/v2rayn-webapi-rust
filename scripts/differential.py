@@ -99,7 +99,10 @@ def normalize_body(value: object) -> object:
     if isinstance(value, dict):
         out = {}
         for key, val in value.items():
-            if key in ("token", "ticket") and isinstance(val, str) and TOKEN_RE.match(val):
+            # C# Utils.GetId() produces a random 19-digit long per entity.
+            if key in ("id", "Id") and isinstance(val, str) and val.isdigit() and len(val) >= 15:
+                out[key] = "<ID>"
+            elif key in ("token", "ticket") and isinstance(val, str) and TOKEN_RE.match(val):
                 out[key] = "<TOKEN>"
             elif key in ("expiresAt", "checkedAt") and isinstance(val, str) and TIMESTAMP_RE.match(val):
                 out[key] = "<TIMESTAMP>"
@@ -107,6 +110,12 @@ def normalize_body(value: object) -> object:
                 # Environment diagnostic string: oracle reports CI paths, Rust
                 # reports its own. Never part of the client-facing contract.
                 out[key] = "<RUNTIME>"
+            elif isinstance(val, str) and val[:1] in ("[", "{"):
+                # Embedded JSON string (e.g. routing ruleSet) — normalize inside.
+                try:
+                    out[key] = json.dumps(normalize_body(json.loads(val)), separators=(",", ":"))
+                except (json.JSONDecodeError, ValueError):
+                    out[key] = val
             else:
                 out[key] = normalize_body(val)
         return out
