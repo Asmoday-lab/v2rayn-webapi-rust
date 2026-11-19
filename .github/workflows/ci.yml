@@ -29,7 +29,7 @@ jobs:
     name: x64 verify (fmt, clippy, test, deps)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -53,18 +53,38 @@ jobs:
     runs-on: ubuntu-24.04
     needs: verify
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
-      - name: Install zig
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
+      - name: Install zig 0.13.0 (pinned, sha256 verified)
+        # goto-bus-stop/setup-zig is deprecated (final v2.2.1), still runs on
+        # Node 20, and its built-in tool cache hits GitHub's retired cache
+        # service (400 / "service unavailable"). Install from the official
+        # tarball with a pinned sha256 from ziglang.org/download/index.json.
+        env:
+          ZIG_VERSION: 0.13.0
+          ZIG_SHA256: d45312e61ebcc48032b77bc4cf7fd6915c11fa16e4aad116b66c9468211230ea
+        run: |
+          set -euo pipefail
+          tarball="zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/${tarball}" -o "$tarball"
+          echo "${ZIG_SHA256}  ${tarball}" | sha256sum --check --strict
+          mkdir -p "$HOME/.local"
+          tar -xf "$tarball" -C "$HOME/.local"
+          echo "$HOME/.local/zig-linux-x86_64-${ZIG_VERSION}" >> "$GITHUB_PATH"
+      - name: Verify zig
+        run: zig version
       - name: Install cargo-zigbuild
         run: cargo install cargo-zigbuild --locked
       - name: Build release (static musl)
+        # zig 0.13 bundles musl 1.2.4, whose dlstart.c uses a K&R declaration
+        # that clang flags as -Wdeprecated-non-prototype under C23. rustc
+        # forwards linker stderr via the `linker_messages` lint; suppress only
+        # that lint (not all warnings) since it is upstream and harmless.
+        env:
+          RUSTFLAGS: -A linker_messages
         run: cargo zigbuild --release --locked --target aarch64-unknown-linux-musl
       - name: Verify statically linked, no INTERP
         run: |
@@ -78,7 +98,7 @@ jobs:
             exit 1
           fi
           echo "static ELF verified: no INTERP, statically linked"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: v2rayn-webapi-rs-aarch64-musl
           path: target/aarch64-unknown-linux-musl/release/v2rayn-webapi-rs
@@ -95,7 +115,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Compare oracle.lock to upstream HEAD
         id: drift
         env:
