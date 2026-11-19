@@ -50,6 +50,25 @@ GET_ENDPOINTS = [
     "/api/web-updates",
 ]
 
+# Safe write operations on a fresh empty data directory: either no-ops or
+# deterministic failures. Captured AFTER all GETs so they cannot perturb the
+# read golden samples. (method, path, json-body-or-None)
+MUTATIONS = [
+    ("DELETE", "/api/logs", None),
+    ("DELETE", "/api/statistics", None),
+    ("DELETE", "/api/speedtests", None),
+    ("POST", "/api/latency/stop", None),
+    ("POST", "/api/core/stop", None),
+    ("POST", "/api/profiles/deduplicate", None),
+    ("DELETE", "/api/profiles/invalid-test-results", None),
+    ("PUT", "/api/profile-groups/current", {"subscriptionId": None}),
+    ("POST", "/api/profile-groups/generate/all", None),
+    ("POST", "/api/settings/routing-profiles/import", None),
+    ("POST", "/api/subscriptions/update", {"subscriptionId": "nonexistent", "useProxy": False}),
+    ("POST", "/api/profiles/0000000000000000000/select", None),
+    ("POST", "/api/core-updates/batch", {"apply": []}),
+]
+
 
 def normalize(value):
     if isinstance(value, dict):
@@ -117,9 +136,26 @@ def main() -> int:
         }
         print(f"{status} {path} ({len(raw)} bytes)")
 
+    # Capture safe write operations last (they may mutate state).
+    mutations = {}
+    for method, path, body in MUTATIONS:
+        headers = {"Authorization": f"Bearer {token}"}
+        payload = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            payload = json.dumps(body).encode()
+        status, raw = raw_request(args.oracle, method, path, headers=headers, body=payload)
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            parsed = raw.decode("utf-8", errors="replace")
+        mutations[f"{method} {path}"] = {"status": status, "body": normalize(parsed)}
+        print(f"{status} {method} {path} ({len(raw)} bytes)")
+
+    dump["__mutations__"] = mutations
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(dump, f, indent=2, ensure_ascii=False)
-    print(f"\nwrote {args.out} with {len(dump)} endpoints")
+    print(f"\nwrote {args.out} with {len(dump) - 1} GET + {len(mutations)} write endpoints")
     return 0
 
 
