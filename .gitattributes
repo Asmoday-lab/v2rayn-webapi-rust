@@ -1,0 +1,12 @@
+# Shell scripts and CI config must stay LF on every platform: a CRLF shebang
+# breaks `bash script.sh` on Ubuntu runners with "bad interpreter".
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf
+Cargo.toml text eol=lf
+Cargo.lock text eol=lf
+oracle.lock text eol=lf
+*.rs text eol=lf
+*.md text eol=lf
+.gitignore text eol=lf

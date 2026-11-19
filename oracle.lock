@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "note": "Pinned upstream revisions used by the differential oracle. Updated by the contract-watch job via PR; never float to HEAD in CI.",
+  "oracle": {
+    "repository": "2dust/v2rayN",
+    "branch": "master",
+    "commit": "9bb74a097b50e76ed490444bf56b20bbea6746f7",
+    "commit_date": "2026-11-19T11:15:30Z",
+    "commit_message": "Fix (#10640)",
+    "contract_paths": [
+      "v2rayN/v2rayN.WebAPI/Api/WebApiEndpoints.cs",
+      "v2rayN/v2rayN.WebAPI/Api/WebAuthEndpoints.cs",
+      "v2rayN/v2rayN.WebAPI/Api/WebSetupEndpoints.cs",
+      "v2rayN/v2rayN.WebAPI/Api/WebHealthEndpoint.cs",
+      "v2rayN/v2rayN.WebAPI/Api/ApiReplies.cs",
+      "v2rayN/v2rayN.WebAPI/Contracts/ApiModels.cs",
+      "v2rayN/v2rayN.WebAPI/Contracts/WebApiCapabilities.cs"
+    ]
+  },
+  "client": {
+    "repository": "Nozilla-X/v2rayN-WebUI-Nova",
+    "branch": "main",
+    "commit": "2ae1ee79b187657a97a96664e3a6c02368add005",
+    "commit_date": "2026-11-15T14:07:12Z",
+    "commit_message": "Fix misleading network errors during first login",
+    "contract_paths": [
+      "Doc/api.md",
+      "README.md"
+    ]
+  }
+}

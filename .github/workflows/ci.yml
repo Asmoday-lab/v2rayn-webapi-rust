@@ -1,0 +1,134 @@
+name: ci
+
+# Only the final aarch64-musl release artifact is CI-only by policy.
+# Local cargo check/fmt/clippy/debug build/test are allowed (see README).
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Daily 03:17 UTC — contract drift check, opens a PR rather than mutating the pin.
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Job 1: x64 fast feedback — fmt / clippy / unit tests / dependency guard.
+  # This is the only job that runs on every push and PR.
+  verify:
+    name: x64 verify (fmt, clippy, test, deps)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+      - name: cargo clippy -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: cargo test (x64 debug)
+        run: cargo test --all-targets
+      - name: dependency graph guard
+        run: bash scripts/check-deps.sh
+      - name: oracle.lock schema check
+        run: python3 -c 'import json;d=json.load(open("oracle.lock"));assert d["schema"]==1;assert len(d["oracle"]["commit"])==40;assert len(d["client"]["commit"])==40;print("oracle.lock OK")'
+
+  # Job 2: the only CI-only compilation — the shipping aarch64-musl static
+  # binary. Produces a release artifact; local builds of this target are banned
+  # by policy, not by CI (there is no enforcement that a human did not build it).
+  build-aarch64-musl:
+    name: build aarch64-unknown-linux-musl (release, static)
+    runs-on: ubuntu-24.04
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - name: Install zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+      - name: Build release (static musl)
+        run: cargo zigbuild --release --locked --target aarch64-unknown-linux-musl
+      - name: Verify statically linked, no INTERP
+        run: |
+          set -euo pipefail
+          bin="target/aarch64-unknown-linux-musl/release/v2rayn-webapi-rs"
+          file "$bin"
+          file "$bin" | grep -q 'statically linked'
+          if readelf -l "$bin" | grep -q INTERP; then
+            echo "ERROR: binary has an INTERP segment (dynamic loader)" >&2
+            readelf -l "$bin" >&2
+            exit 1
+          fi
+          echo "static ELF verified: no INTERP, statically linked"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2rayn-webapi-rs-aarch64-musl
+          path: target/aarch64-unknown-linux-musl/release/v2rayn-webapi-rs
+          if-no-files-found: error
+
+  # Job 3: contract drift watch. Does NOT auto-advance oracle.lock (that would
+  # silently change the differential baseline). It opens a PR instead, so the
+  # lock mutation is reviewable. Runs on a schedule and on demand.
+  contract-watch:
+    name: watch upstream contract drift
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare oracle.lock to upstream HEAD
+        id: drift
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api=https://api.github.com/repos/2dust/v2rayN/commits/master
+          upstream=$(curl -fsSL "$api" | python3 -c 'import json,sys;print(json.load(sys.stdin)["sha"])')
+          pinned=$(python3 -c 'import json;print(json.load(open("oracle.lock"))["oracle"]["commit"])')
+          echo "upstream=$upstream"
+          echo "pinned=$pinned"
+          if [ "$upstream" != "$pinned" ]; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::oracle.lock is pinned to $pinned; upstream master is $upstream"
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open lock-update PR on drift
+        if: steps.drift.outputs.drift == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CONTRACT_WATCH_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/bump-oracle-lock.py
+          git config user.name 'contract-watch[bot]'
+          git config user.email 'contract-watch@users.noreply.github.com'
+          branch="contract-watch/$(date +%Y%m%d)"
+          git checkout -b "$branch"
+          git add oracle.lock
+          git commit -m "chore: advance oracle.lock to upstream HEAD"
+          git push origin "$branch"
+          gh pr create \
+            --title "chore: advance differential oracle baseline" \
+            --body "Auto-generated by contract-watch. CI will run the full differential suite against the new pin; review before merging." \
+            --head "$branch" \
+            --base "${{ github.event.repository.default_branch }}"

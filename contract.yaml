@@ -1,0 +1,83 @@
+# Contract inventory — tracked from upstream, never frozen locally.
+#
+# Source of truth: oracle.lock commits. This file is a *map*, not a spec:
+# it records which upstream file defines each contract surface. The differential
+# test derives actual request/response pairs from the pinned C# source at CI time.
+#
+# Regenerate/inspect with: python3 scripts/contract-inventory.py
+
+version: 1
+oracle: oracle.lock
+
+# Counts measured 2026-11-14 from v2rayN.WebAPI (93 REST + 1 SSE).
+counts:
+  rest_endpoints: 93
+  sse_endpoints: 1
+  sse_event_types: 15
+  stable_error_codes: 100
+  capabilities: 12
+
+capabilities:
+  - auth.sessions
+  - events.sse
+  - editor.options
+  - profiles
+  - subscriptions
+  - routing
+  - dns
+  - settings
+  - backup.restore
+  - core.runtime
+  - core.updates
+  - WebAPI.self-update
+
+# Endpoint groups by URL prefix. Full path lists live in the pinned C# source
+# (Api/WebApiEndpoints.cs etc.), counted here for drift detection.
+endpoint_groups:
+  settings: 31
+  profiles: 15
+  subscriptions: 8
+  core-updates: 6
+  core: 6
+  backup: 5
+  profile-groups: 4
+  web-updates: 3
+  logs: 3
+  auth: 3
+  speedtests: 2
+  setup: 2
+  operations: 2
+  status: 1
+  statistics: 1
+  latency: 1
+  health: 1
+  events: 1
+  editor-options: 1
+
+# Contract surfaces with known non-obvious semantics — these are the ones most
+# likely to break a Rust reimplementation and must be covered by differential tests.
+semantic_hotspots:
+  - id: health-headers
+    source: Api/WebHealthEndpoint.cs
+    note: 'Body {"status":"ok"}; loopback-only diagnostic headers (pid/version/core-state/process-ids/profile-id). Skeleton emits headers unconditionally — TODO: port WebSetupAccessPolicy.'
+  - id: json-enum-casing
+    source: Program.cs:245
+    note: JsonStringEnumConverter(JsonNamingPolicy.CamelCase); JsonSerializerDefaults.Web everywhere.
+  - id: case-insensitive-duplicate
+    source: V2rayRuntime.Backup.cs:819
+    note: PropertyNameCaseInsensitive=true on backup restore; C# keeps last duplicate. Nova commits fbe6134/625c65d exist solely to match this.
+  - id: session
+    source: Security/WebAuthService.cs
+    note: 32B base64url session; sliding 7d / absolute 30d; login rate limit 5/min.
+  - id: sse-ticket
+    source: Api/WebApiEndpoints.cs
+    note: one-shot 45s ticket for /api/events.
+  - id: setup-loopback
+    source: Api/WebSetupEndpoints.cs
+    note: loopback + same-origin + no forwarded headers; 10/min rate limit.
+  - id: cors-origin-guard
+    source: Security/WebCorsPolicy.cs
+    note: exact origin allowlist; middleware order matters; 64KiB body cap.
+  - id: capabilities
+    source: Contracts/WebApiCapabilities.cs
+    note: 12 items incl. core.updates + WebAPI.self-update — Termux build must not silently drop these.
