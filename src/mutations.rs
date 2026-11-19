@@ -60,6 +60,7 @@ pub async fn profiles_clear_invalid() -> Response {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GroupCurrentRequest {
     #[serde(default)]
     subscription_id: Option<String>,
@@ -81,6 +82,7 @@ pub async fn routing_import() -> Response {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SubscriptionUpdateRequest {
     #[serde(default)]
     subscription_id: Option<String>,
@@ -97,6 +99,26 @@ pub async fn subscription_update(Json(request): Json<SubscriptionUpdateRequest>)
             "subscriptionId": request.subscription_id.unwrap_or_default(),
             "useProxy": request.use_proxy.unwrap_or(false),
         }),
+        StatusCode::ACCEPTED,
+    )
+}
+
+pub async fn generate_all_groups() -> Response {
+    operation(
+        false,
+        "profile_group_empty",
+        "profiles.grouped",
+        json!(null),
+        StatusCode::BAD_REQUEST,
+    )
+}
+
+pub async fn core_update_batch() -> Response {
+    operation(
+        true,
+        "ok",
+        "common.completed",
+        json!({"changed": false, "coreRestarted": false, "restartRequired": false}),
         StatusCode::ACCEPTED,
     )
 }
@@ -132,5 +154,17 @@ mod tests {
             .filter(|s| !s.is_empty())
             .unwrap_or_default();
         assert_eq!(id, "");
+    }
+
+    #[test]
+    fn camel_case_request_fields_are_deserialized() {
+        // C# Web defaults are camelCase; snake_case must not silently become None.
+        let r: SubscriptionUpdateRequest =
+            serde_json::from_str(r#"{"subscriptionId":"sub-1","useProxy":true}"#).unwrap();
+        assert_eq!(r.subscription_id.as_deref(), Some("sub-1"));
+        assert_eq!(r.use_proxy, Some(true));
+
+        let g: GroupCurrentRequest = serde_json::from_str(r#"{"subscriptionId":"g-1"}"#).unwrap();
+        assert_eq!(g.subscription_id.as_deref(), Some("g-1"));
     }
 }

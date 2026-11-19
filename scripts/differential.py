@@ -315,6 +315,8 @@ CORPUS: list[Case] = [
     Case(name="mut/routing-import", method="POST", path="/api/settings/routing-profiles/import", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="mut/subscription-update", method="POST", path="/api/subscriptions/update", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"subscriptionId": "nonexistent", "useProxy": False}), auth=True),
     Case(name="mut/profile-select-notfound", method="POST", path="/api/profiles/0000000000000000000/select", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/generate-all-groups-empty", method="POST", path="/api/profile-groups/generate/all", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/core-update-batch-empty", method="POST", path="/api/core-updates/batch", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"apply": []}), auth=True),
 ]
 
 

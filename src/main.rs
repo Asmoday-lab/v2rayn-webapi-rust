@@ -100,6 +100,14 @@ async fn main() {
             put(mutations::set_current_group),
         )
         .route(
+            "/api/profile-groups/generate/all",
+            post(mutations::generate_all_groups),
+        )
+        .route(
+            "/api/core-updates/batch",
+            post(mutations::core_update_batch),
+        )
+        .route(
             "/api/settings/routing-profiles/import",
             post(mutations::routing_import),
         )
