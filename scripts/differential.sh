@@ -75,6 +75,14 @@ python3 "$root/scripts/differential.py" \
 result=$?
 
 echo "=== differential result: $result ==="
+
+# While the oracle is still alive, dump its GET-endpoint responses as the
+# authoritative golden sample for implementing Rust DTOs (uploaded as artifact).
+echo "=== dumping oracle golden sample ==="
+python3 "$root/scripts/dump-oracle.py" \
+  --oracle "http://127.0.0.1:$oracle_port" \
+  --out "$root/oracle-dump.json" || echo "dump failed (non-fatal)"
+
 if [[ "$result" -ne 0 ]]; then
   echo "--- oracle log tail ---" >&2
   tail -n 40 "$tmp/oracle.log" >&2 || true

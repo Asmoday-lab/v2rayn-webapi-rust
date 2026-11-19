@@ -77,6 +77,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Differential health suite
         run: bash scripts/differential.sh "$PWD/oracle-src"
+      - name: Upload oracle golden sample
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: oracle-golden-sample
+          path: oracle-dump.json
+          if-no-files-found: warn
       - name: Upload differential logs on failure
         if: failure()
         uses: actions/upload-artifact@v7

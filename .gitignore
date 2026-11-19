@@ -2,4 +2,5 @@
 *.log
 .DS_Store
 oracle-src/
+oracle-dump.json
 docs/github_token.txt
