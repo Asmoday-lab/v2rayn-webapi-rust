@@ -45,6 +45,48 @@ jobs:
       - name: oracle.lock schema check
         run: python3 -c 'import json;d=json.load(open("oracle.lock"));assert d["schema"]==1;assert len(d["oracle"]["commit"])==40;assert len(d["client"]["commit"])==40;print("oracle.lock OK")'
 
+  # Job 1b: differential test against the pinned C# oracle. Runs on x64 so the
+  # oracle (net10.0, no Android target) can execute. This is the authority for
+  # "contract-compatible" — a green verify job alone proves nothing.
+  differential:
+    name: x64 differential vs pinned C# oracle
+    runs-on: ubuntu-24.04
+    needs: verify
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve pinned oracle SHA
+        id: pin
+        run: |
+          set -euo pipefail
+          sha="$(python3 -c 'import json;print(json.load(open("oracle.lock"))["oracle"]["commit"])')"
+          repo="$(python3 -c 'import json;print(json.load(open("oracle.lock"))["oracle"]["repository"])')"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "oracle commit $sha @ $repo"
+      - name: Checkout pinned C# oracle source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.pin.outputs.repo }}
+          ref: ${{ steps.pin.outputs.sha }}
+          path: oracle-src
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Differential health suite
+        run: bash scripts/differential.sh "$PWD/oracle-src"
+      - name: Upload differential logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: differential-logs
+          path: |
+            /tmp/tmp.*/oracle.log
+            /tmp/tmp.*/rust.log
+          if-no-files-found: ignore
+
   # Job 2: the only CI-only compilation — the shipping aarch64-musl static
   # binary. Produces a release artifact; local builds of this target are banned
   # by policy, not by CI (there is no enforcement that a human did not build it).

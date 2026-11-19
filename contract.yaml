@@ -59,7 +59,8 @@ endpoint_groups:
 semantic_hotspots:
   - id: health-headers
     source: Api/WebHealthEndpoint.cs
-    note: 'Body {"status":"ok"}; loopback-only diagnostic headers (pid/version/core-state/process-ids/profile-id). Skeleton emits headers unconditionally — TODO: port WebSetupAccessPolicy.'
+    status: covered-by-differential
+    note: 'Body {"status":"ok"}; 5 diagnostic headers only for loopback peer + local Host + same-origin + no forwarded headers. Ported from WebSetupAccessPolicy + WebCorsPolicy.IsSameOriginRequest; verified by differential job (plain + forwarded-header cases). Foreign-Origin 403 case deferred until WebOriginGuardMiddleware is ported.'
   - id: json-enum-casing
     source: Program.cs:245
     note: JsonStringEnumConverter(JsonNamingPolicy.CamelCase); JsonSerializerDefaults.Web everywhere.

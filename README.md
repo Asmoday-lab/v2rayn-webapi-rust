@@ -10,12 +10,35 @@ This is the **skeleton milestone**: CI toolchain is being brought up green befor
 - [x] x64 CI: fmt / clippy (`-D warnings`) / tests / dependency guard
 - [x] aarch64-unknown-linux-musl static release build in CI (zig + cargo-zigbuild), verified `statically linked` and no `INTERP`
 - [x] `oracle.lock` pins both upstream C# and Nova commits; daily drift watch opens a PR instead of silently advancing the pin
-- [x] `/api/health` body matches the C# contract `{"status":"ok"}` with diagnostic headers
+- [x] `/api/health` body matches the C# contract `{"status":"ok"}` and emits the 5 diagnostic headers only for a local, same-origin, non-forwarded probe (mirrors `WebSetupAccessPolicy` + `WebCorsPolicy.IsSameOriginRequest`)
 - [x] dependency graph guard: no `aws-lc-rs` / `openssl-sys` / `rusqlite` / native-tls
+- [x] differential test against the pinned C# oracle: headless startup + health body/header-set comparison (2 cases) runs in CI on x64
 - [ ] Core process management (Xray + sing-box)
 - [ ] Profile/subscription/settings endpoints (93 REST + 1 SSE)
-- [ ] Differential test request corpus (harness skeleton only)
+- [ ] Remaining differential cases (auth/CORS 403, session, SSE ticket, settings/profiles)
 - [ ] Termux DNS / CA / wakelock adaptation
+
+## Differential test
+
+The `differential` CI job is the authority for "contract-compatible". It checks out the
+exact C# commit from `oracle.lock`, publishes it with .NET 10, starts it headless on
+`:5081` using the same recipe as upstream's `test-startup-security.sh` (valid management
+key, isolated `V2RAYN_DATA_HOME`, autostart off, loopback URL, `--foreground --no-open`),
+starts the Rust build on `:5082`, and runs `scripts/differential.py`. That script sends
+the identical request to both and compares status, JSON body, and the *set* of health
+diagnostic header names (values are process/version-specific and normalized out).
+
+To reproduce locally you need `dotnet` 10.x installed (CI has it via `setup-dotnet`):
+
+```bash
+# 1. fetch the pinned C# source into oracle-src/
+# 2. run the whole thing (starts/stops both servers itself):
+bash scripts/differential.sh "$PWD/oracle-src"
+```
+
+The current corpus covers only `/api/health` because it is the sole endpoint that needs
+no auth, Core, or data files. A foreign `Origin` case is deferred until the
+`WebOriginGuardMiddleware` (403) is ported — tracked in `contract.yaml`.
 
 ## Local vs CI compilation policy
 
@@ -42,6 +65,7 @@ bash scripts/check-deps.sh
 `.github/workflows/ci.yml` runs on push/PR (verify job) and nightly 03:17 UTC (contract-watch job).
 
 - **verify** — x64 fast feedback: fmt, clippy, tests, dependency guard, `oracle.lock` schema.
+- **differential** — x64, checks out the pinned C# commit, builds and starts both servers headless, runs the request corpus against both. This is the contract authority; needs-dotnet 10.x.
 - **build-aarch64-musl** — release static binary, verified with `file` and `readelf`, uploaded as artifact `v2rayn-webapi-rs-aarch64-musl`.
 - **contract-watch** — nightly, compares `oracle.lock` to upstream HEAD; on drift, advances the pin in a branch and opens a PR. Requires `CONTRACT_WATCH_TOKEN` secret **only if** the default `GITHUB_TOKEN` cannot push branches in your repo settings; otherwise leave it unset. Review the PR before merging so the differential baseline change is visible.
 
