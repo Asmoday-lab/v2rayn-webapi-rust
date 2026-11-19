@@ -24,8 +24,11 @@ export V2RAYN_WEB_AUTOSTART='false'
 export ASPNETCORE_URLS="http://127.0.0.1:${port}"
 
 # Clear any supervisor/container markers so Program.Main sees a plain CI host.
+# --no-launch-profile is essential: without it `dotnet run` loads
+# Properties/launchSettings.json, whose applicationUrl overrides
+# ASPNETCORE_URLS and binds 4939/4940 instead of our chosen port.
 env -u INVOCATION_ID -u JOURNAL_STREAM -u NOTIFY_SOCKET \
     -u DOTNET_RUNNING_IN_CONTAINER -u container \
-    dotnet run --project "$project" --configuration Release -- \
+    dotnet run --project "$project" --configuration Release --no-launch-profile -- \
     --foreground --no-open >"$log_file" 2>&1 &
 echo $! >"$pid_file"
