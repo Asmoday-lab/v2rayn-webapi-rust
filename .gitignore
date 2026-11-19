@@ -4,3 +4,5 @@
 oracle-src/
 oracle-dump.json
 docs/github_token.txt
+__pycache__/
+*.pyc
