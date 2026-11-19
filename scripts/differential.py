@@ -110,6 +110,10 @@ def normalize_body(value: object) -> object:
                 # Environment diagnostic string: oracle reports CI paths, Rust
                 # reports its own. Never part of the client-facing contract.
                 out[key] = "<RUNTIME>"
+            elif key == "generation" and isinstance(val, int):
+                # Log-clear generation counter increments per call; not a value
+                # the client depends on beyond "changed".
+                out[key] = "<N>"
             elif isinstance(val, str) and val[:1] in ("[", "{"):
                 # Embedded JSON string (e.g. routing ruleSet) — normalize inside.
                 try:
@@ -299,6 +303,18 @@ CORPUS: list[Case] = [
         headers={"Host": "127.0.0.1:PORT"},
         auth=True,
     ),
+    # ---- deterministic write operations (empty-data behavior) ----
+    Case(name="mut/clear-logs", method="DELETE", path="/api/logs", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/clear-statistics", method="DELETE", path="/api/statistics", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/stop-speedtests", method="DELETE", path="/api/speedtests", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/stop-latency", method="POST", path="/api/latency/stop", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/core-stop", method="POST", path="/api/core/stop", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/profiles-deduplicate", method="POST", path="/api/profiles/deduplicate", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/profiles-clear-invalid", method="DELETE", path="/api/profiles/invalid-test-results", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/set-current-group", method="PUT", path="/api/profile-groups/current", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"subscriptionId": None}), auth=True),
+    Case(name="mut/routing-import", method="POST", path="/api/settings/routing-profiles/import", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="mut/subscription-update", method="POST", path="/api/subscriptions/update", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"subscriptionId": "nonexistent", "useProxy": False}), auth=True),
+    Case(name="mut/profile-select-notfound", method="POST", path="/api/profiles/0000000000000000000/select", headers={"Host": "127.0.0.1:PORT"}, auth=True),
 ]
 
 

@@ -8,6 +8,7 @@
 mod auth;
 mod endpoints;
 mod events;
+mod mutations;
 mod security;
 mod session;
 mod state;
@@ -15,7 +16,10 @@ mod state;
 use axum::extract::ConnectInfo;
 use axum::http::{HeaderName, StatusCode};
 use axum::response::IntoResponse;
-use axum::{Json, Router, routing::get, routing::post};
+use axum::{
+    Json, Router,
+    routing::{delete, get, post, put},
+};
 use security::{is_local_diagnostic_source, security_middleware};
 use serde::Serialize;
 use state::AppState;
@@ -77,6 +81,33 @@ async fn main() {
             get(endpoints::core_update_progress),
         )
         .route("/api/events", get(events::events))
+        // Deterministic write operations on a fresh/headless install.
+        .route("/api/logs", delete(mutations::clear_logs))
+        .route("/api/statistics", delete(mutations::clear_statistics))
+        .route("/api/speedtests", delete(mutations::stop_speedtests))
+        .route("/api/latency/stop", post(mutations::stop_latency))
+        .route("/api/core/stop", post(mutations::core_stop))
+        .route(
+            "/api/profiles/deduplicate",
+            post(mutations::profiles_deduplicate),
+        )
+        .route(
+            "/api/profiles/invalid-test-results",
+            delete(mutations::profiles_clear_invalid),
+        )
+        .route(
+            "/api/profile-groups/current",
+            put(mutations::set_current_group),
+        )
+        .route(
+            "/api/settings/routing-profiles/import",
+            post(mutations::routing_import),
+        )
+        .route(
+            "/api/subscriptions/update",
+            post(mutations::subscription_update),
+        )
+        .route("/api/profiles/{id}/select", post(mutations::profile_select))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,
