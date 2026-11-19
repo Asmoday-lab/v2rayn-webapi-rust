@@ -60,7 +60,9 @@ oracle_pid="$(cat "$tmp/oracle.pid")"
 wait_health "http://127.0.0.1:$oracle_port" "oracle" "$oracle_pid" "$tmp/oracle.log"
 
 echo "=== starting Rust on :$rust_port ==="
+# Both servers must share the same management key so login behaves identically.
 ASPNETCORE_URLS="http://127.0.0.1:$rust_port" \
+  V2RAYN_WEB_API_KEY='ci-oracle-key-1234567890' \
   "$root/target/debug/v2rayn-webapi-rs" >"$tmp/rust.log" 2>&1 &
 rust_pid=$!
 echo "$rust_pid" >"$tmp/rust.pid"
