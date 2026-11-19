@@ -110,6 +110,26 @@ pub async fn speedtests_start() -> Response {
     )
 }
 
+/// `POST /api/core/start` on a fresh install: no default profile is selected.
+pub async fn core_start() -> Response {
+    fail(
+        "profile_not_selected",
+        "profiles.noneSelected",
+        json!(null),
+        StatusCode::CONFLICT,
+    )
+}
+
+/// `POST /api/core/restart` with no running core (enum ToString keeps casing).
+pub async fn core_restart() -> Response {
+    fail(
+        "core_not_running",
+        "core.notRunning",
+        json!({"runtimeState": "Stopped", "processIds": []}),
+        StatusCode::CONFLICT,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,6 +157,8 @@ mod tests {
                 speedtests_start().await,
                 "speedtest_profile_selection_required",
             ),
+            (core_start().await, "profile_not_selected"),
+            (core_restart().await, "core_not_running"),
         ];
         for (resp, expected_code) in cases {
             assert!(resp.status().is_client_error());

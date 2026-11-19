@@ -145,6 +145,8 @@ async fn main() {
         )
         .route("/api/profiles/copy", post(validation::profiles_copy))
         .route("/api/speedtests", post(validation::speedtests_start))
+        .route("/api/core/start", post(validation::core_start))
+        .route("/api/core/restart", post(validation::core_restart))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,

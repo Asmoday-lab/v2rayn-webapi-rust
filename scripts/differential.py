@@ -369,6 +369,8 @@ CORPUS: list[Case] = [
     Case(name="val/generate-regions-missing-sub", method="POST", path="/api/profile-groups/generate/regions?subscriptionId=__missing__", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="val/profiles-copy-empty-ids", method="POST", path="/api/profiles/copy", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"profileIds": []}), auth=True),
     Case(name="val/speedtests-no-profiles", method="POST", path="/api/speedtests", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"action": "tcping", "profileIds": []}), auth=True),
+    Case(name="val/core-start-no-profile", method="POST", path="/api/core/start", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="val/core-restart-not-running", method="POST", path="/api/core/restart", headers={"Host": "127.0.0.1:PORT"}, auth=True),
 ]
 
 
