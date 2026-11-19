@@ -6,6 +6,7 @@
 //! origin guard → rate limit → session auth).
 
 mod auth;
+mod endpoints;
 mod security;
 mod session;
 mod state;
@@ -40,11 +41,40 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/status", get(endpoints::status_handler))
         .route("/api/setup/status", get(auth::setup_status))
         .route("/api/setup", post(auth::setup))
         .route("/api/auth/login", post(auth::login))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/auth/sse-ticket", post(auth::sse_ticket))
+        // Static/near-static GET endpoints (data captured from the pinned oracle).
+        .route("/api/operations", get(endpoints::operations))
+        .route("/api/profile-groups", get(endpoints::profile_groups))
+        .route("/api/editor-options", get(endpoints::editor_options))
+        .route("/api/subscriptions", get(endpoints::subscriptions))
+        .route("/api/profiles", get(endpoints::profiles))
+        .route("/api/settings", get(endpoints::settings))
+        .route("/api/settings/webdav", get(endpoints::webdav_settings))
+        .route("/api/settings/dns/simple", get(endpoints::dns_simple))
+        .route("/api/settings/dns/profiles", get(endpoints::dns_profiles))
+        .route(
+            "/api/settings/dns/editor-options",
+            get(endpoints::dns_editor_options),
+        )
+        .route("/api/settings/dns/defaults", get(endpoints::dns_defaults))
+        .route(
+            "/api/settings/routing-profiles",
+            get(endpoints::routing_profiles),
+        )
+        .route(
+            "/api/settings/core-templates",
+            get(endpoints::core_templates),
+        )
+        .route("/api/core-updates", get(endpoints::core_updates))
+        .route(
+            "/api/core-updates/progress",
+            get(endpoints::core_update_progress),
+        )
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,
