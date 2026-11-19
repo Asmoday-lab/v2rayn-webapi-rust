@@ -316,7 +316,20 @@ CORPUS: list[Case] = [
     Case(name="mut/subscription-update", method="POST", path="/api/subscriptions/update", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"subscriptionId": "nonexistent", "useProxy": False}), auth=True),
     Case(name="mut/profile-select-notfound", method="POST", path="/api/profiles/0000000000000000000/select", headers={"Host": "127.0.0.1:PORT"}, auth=True),
     Case(name="mut/generate-all-groups-empty", method="POST", path="/api/profile-groups/generate/all", headers={"Host": "127.0.0.1:PORT"}, auth=True),
-    Case(name="mut/core-update-batch-empty", method="POST", path="/api/core-updates/batch", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"apply": []}), auth=True),
+    # ---- deterministic validation failures (no Core/IO side effects) ----
+    Case(name="val/profile-import-empty", method="POST", path="/api/profiles/import", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"content": ""}), auth=True),
+    Case(name="val/routing-rules-import-bad-json", method="POST", path="/api/settings/routing-profiles/missing/rules/import", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"content": "not-json"}), auth=True),
+    Case(name="val/routing-strategy-invalid", method="PUT", path="/api/settings/routing", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"domainStrategy": "__invalid__", "domainStrategy4Singbox": None}), auth=True),
+    Case(name="val/app-settings-negative-interval", method="PUT", path="/api/settings/application", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"enableStatistics": False, "displayRealTimeSpeed": False, "keepOlderDedupl": False, "geoAutoUpdateInterval": -1, "rootCertProvider": None, "geoSourceUrl": None, "srsSourceUrl": None, "routeRulesTemplateSourceUrl": None, "subConvertUrl": None}), auth=True),
+    Case(name="val/inbound-port-zero", method="PUT", path="/api/settings/inbound", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"localPort": 0, "secondLocalPortEnabled": False, "udpEnabled": False, "sniffingEnabled": False, "destOverride": None, "routeOnly": False, "allowLANConn": False, "newPort4LAN": False, "user": None, "pass": None}), auth=True),
+    Case(name="val/speedtest-timeout-zero", method="PUT", path="/api/settings/speedtest", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"speedTestTimeout": 0, "speedTestUrl": "", "speedPingTestUrl": "", "mixedConcurrencyCount": 0, "ipapiUrl": "", "udpTestTarget": ""}), auth=True),
+    Case(name="val/subscription-create-empty-remarks", method="POST", path="/api/subscriptions", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"remarks": "", "url": ""}), auth=True),
+    Case(name="val/subscription-delete-missing", method="DELETE", path="/api/subscriptions/__missing__", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="val/profiles-sort-invalid-column", method="POST", path="/api/profiles/sort", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"subscriptionId": None, "column": "__invalid__", "ascending": False}), auth=True),
+    Case(name="val/profiles-delete-empty-ids", method="DELETE", path="/api/profiles", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"profileIds": []}), auth=True),
+    Case(name="val/routing-import-url-missing-profile", method="POST", path="/api/settings/routing-profiles/__missing__/rules/import-url", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({}), auth=True),
+    Case(name="val/generate-regions-missing-sub", method="POST", path="/api/profile-groups/generate/regions?subscriptionId=__missing__", headers={"Host": "127.0.0.1:PORT"}, auth=True),
+    Case(name="val/profiles-copy-empty-ids", method="POST", path="/api/profiles/copy", headers={"Host": "127.0.0.1:PORT", "Content-Type": "application/json"}, body=json_body({"profileIds": []}), auth=True),
 ]
 
 

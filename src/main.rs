@@ -12,6 +12,7 @@ mod mutations;
 mod security;
 mod session;
 mod state;
+mod validation;
 
 use axum::extract::ConnectInfo;
 use axum::http::{HeaderName, StatusCode};
@@ -104,10 +105,6 @@ async fn main() {
             post(mutations::generate_all_groups),
         )
         .route(
-            "/api/core-updates/batch",
-            post(mutations::core_update_batch),
-        )
-        .route(
             "/api/settings/routing-profiles/import",
             post(mutations::routing_import),
         )
@@ -116,6 +113,35 @@ async fn main() {
             post(mutations::subscription_update),
         )
         .route("/api/profiles/{id}/select", post(mutations::profile_select))
+        // Deterministic validation failures (no Core/IO side effects).
+        .route("/api/profiles/import", post(validation::profile_import))
+        .route(
+            "/api/settings/routing-profiles/{id}/rules/import",
+            post(validation::routing_rules_import),
+        )
+        .route("/api/settings/routing", put(validation::routing_strategy))
+        .route("/api/settings/application", put(validation::app_settings))
+        .route("/api/settings/inbound", put(validation::inbound_settings))
+        .route(
+            "/api/settings/speedtest",
+            put(validation::speedtest_settings),
+        )
+        .route("/api/subscriptions", post(validation::subscription_create))
+        .route(
+            "/api/subscriptions/{id}",
+            delete(validation::subscription_delete),
+        )
+        .route("/api/profiles/sort", post(validation::profiles_sort))
+        .route("/api/profiles", delete(validation::profiles_delete))
+        .route(
+            "/api/settings/routing-profiles/{id}/rules/import-url",
+            post(validation::routing_rules_import_url),
+        )
+        .route(
+            "/api/profile-groups/generate/regions",
+            post(validation::generate_regions_groups),
+        )
+        .route("/api/profiles/copy", post(validation::profiles_copy))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,

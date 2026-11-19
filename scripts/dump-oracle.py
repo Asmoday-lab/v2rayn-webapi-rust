@@ -66,7 +66,6 @@ MUTATIONS = [
     ("POST", "/api/settings/routing-profiles/import", None),
     ("POST", "/api/subscriptions/update", {"subscriptionId": "nonexistent", "useProxy": False}),
     ("POST", "/api/profiles/0000000000000000000/select", None),
-    ("POST", "/api/core-updates/batch", {"apply": []}),
 ]
 
 

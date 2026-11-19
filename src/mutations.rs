@@ -113,16 +113,6 @@ pub async fn generate_all_groups() -> Response {
     )
 }
 
-pub async fn core_update_batch() -> Response {
-    operation(
-        true,
-        "ok",
-        "common.completed",
-        json!({"changed": false, "coreRestarted": false, "restartRequired": false}),
-        StatusCode::ACCEPTED,
-    )
-}
-
 pub async fn profile_select() -> Response {
     operation(
         false,
