@@ -12,6 +12,7 @@ mod mutations;
 mod security;
 mod session;
 mod state;
+mod static_files;
 mod validation;
 
 use axum::extract::ConnectInfo;
@@ -152,6 +153,22 @@ async fn main() {
             security_middleware,
         ))
         .with_state(state);
+
+    // Optional same-origin Nova hosting. Without it an HTTPS-served Nova build
+    // cannot call this loopback HTTP API (mixed content / PNA).
+    let app = match std::env::var_os("NOVA_DIST_DIR").map(std::path::PathBuf::from) {
+        Some(root) if root.is_dir() => {
+            tracing::info!(path = %root.display(), "serving Nova SPA from NOVA_DIST_DIR");
+            app.fallback({
+                let root = root.clone();
+                move |uri: axum::http::Uri| {
+                    let root = root.clone();
+                    async move { static_files::serve(&root, uri).await }
+                }
+            })
+        }
+        _ => app,
+    };
 
     tracing::info!(%bind, version = VERSION, "v2rayN WebAPI (Rust) starting");
 

@@ -111,3 +111,19 @@ semantic_hotspots:
     source: Services/V2rayRuntime.CoreUpdate.cs:203-260
     status: intentionally-uncovered
     note: 'POST /api/core-updates/batch is NOT differential-testable: CoreUpdateBatchInput.Apply is bool and even apply=false spawns RunSelectedCoreUpdateBatchAsync (network downloads). Excluded from corpus, oracle dump and Rust routes; do not re-add without a hermetic core-update fixture.'
+  - id: logs-page-content-nondeterministic
+    source: Services/V2rayRuntime.Logs.cs (per-process log buffer)
+    status: shape-checked-in-differential
+    note: 'GET /api/logs/page is on Nova startup path, but log records come from the oracle process lifetime (paths, core-missing messages) and cannot be a golden. Differential compares envelope + pagination fields only; Rust serves an empty page.'
+  - id: nova-startup-path
+    source: Nozilla-X/v2rayN-WebUI-Nova Src/App.vue:209-230, Src/Composables/*
+    status: covered-by-differential
+    note: 'setup/status → login → profile-groups/status/operations/profiles/subscriptions/editor-options/settings/routing-profiles/logs/page → sse-ticket → events. Nova does not call /api/latency/stop or /api/logs?limit=; those exist in Rust only for full C# parity.'
+  - id: core-headless-errors
+    source: Services/V2rayRuntime.cs:759-777, 1052-1063
+    status: covered-by-differential
+    note: 'On a fresh data directory /api/core/start returns 409 profile_not_selected and /api/core/restart returns 409 core_not_running with runtimeState=Stopped, processIds=[]. No Core binary is spawned on these paths.'
+  - id: same-origin-spa-hosting
+    source: Deployment concern, not in C# WebAPI contract
+    status: termux-adaptation
+    note: 'NOVA_DIST_DIR enables an axum fallback serving Nova dist with SPA routing; required because an HTTPS Nova page cannot call a loopback HTTP API (mixed content / PNA). Not differential-tested against C# (C# never hosted a SPA).'

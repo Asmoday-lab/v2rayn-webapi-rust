@@ -17,7 +17,9 @@ byte-for-byte against the pinned C# oracle in CI.
 - [x] `/api/health` with the exact 5 diagnostic headers under `WebSetupAccessPolicy`
 - [x] 16 static/near-static GET endpoints (status, editor-options, settings + dns, profile-groups, core/web-updates, operations, subscriptions, profiles…) with data captured from the oracle golden sample and embedded as JSON resources
 - [x] SSE `/api/events` (heartbeat stream, one-shot ticket auth)
-- [x] Differential suite: **54/54 cases match** the pinned C# oracle in CI, including auth, CORS 403, session, SSE ticket, all static endpoints, deterministic headless write operations, and validation error paths
+- [x] Differential suite: **59/59 cases match** the pinned C# oracle in CI, including auth, CORS 403, session, SSE ticket, all static endpoints, deterministic headless write operations, and validation error paths
+- [x] Nova startup path complete: `/api/setup/status` → login → status/groups/profiles/subscriptions/settings/routing + `/api/logs/page` (shape-checked) + SSE ticket
+- [x] Optional same-origin Nova SPA hosting via `NOVA_DIST_DIR` (avoids mixed-content / Private Network Access on HTTPS)
 - [x] Oracle golden-sample dump (GET data + `__mutations__` write responses) uploaded as a CI artifact for DTO parity
 - [ ] Core process management (Xray + sing-box)
 - [ ] Real state mutation (profiles/subscriptions/settings persistence, backup, update triggers) — currently only the headless-deterministic no-op/error paths are implemented
@@ -41,16 +43,19 @@ To reproduce locally you need `dotnet` 10.x installed (CI has it via `setup-dotn
 bash scripts/differential.sh "$PWD/oracle-src"
 ```
 
-The corpus currently has 54 cases: health (plain / forwarded / foreign-origin-403),
+The corpus currently has 59 cases: health (plain / forwarded / foreign-origin-403),
 setup-status, login (wrong / empty / valid key), unauthenticated rejections, all
-16 static GET endpoints, SSE no-ticket / bogus-ticket 401, authenticated
+18 static GET endpoints (including `/api/web-updates` and the `/api/logs/page`
+pagination shape), SSE no-ticket / bogus-ticket 401, authenticated
 sse-ticket minting, 11 deterministic write operations captured in the oracle's
-`__mutations__` golden sample, and 13 input-validation failures transcribed from
-the pinned C# `V2rayRuntime.*.cs` sources. Volatile values (session/ticket tokens,
-timestamps, random entity ids, log-clear generation counters, environment
-diagnostic strings) are normalized before comparing. A per-run golden sample is
-uploaded as the `oracle-golden-sample` artifact and is the authoritative source
-for the embedded DTO resources in `resources/`.
+`__mutations__` golden sample, and 18 validation/Core-error paths transcribed
+from the pinned C# `V2rayRuntime.*.cs` sources. Volatile values (session/ticket
+tokens, timestamps, random entity ids, log-clear generation counters,
+environment diagnostic strings) are normalized before comparing. Log *content*
+is process-local, so `/api/logs/page` is compared by envelope + pagination
+shape only. A per-run golden sample is uploaded as the `oracle-golden-sample`
+artifact and is the authoritative source for the embedded DTO resources in
+`resources/`.
 
 Operations that spawn Core processes, network downloads or real file writes are
 deliberately **excluded** from the corpus (e.g. `/api/core-updates/batch`, whose
@@ -93,6 +98,16 @@ The shipping artifact is a fully static musl ELF with no `INTERP` segment, so th
 ```
 aarch64-unknown-linux-musl, statically linked, no INTERP
 ```
+
+## Same-origin Nova hosting
+
+Point `NOVA_DIST_DIR` at the directory containing Nova's built `index.html` and assets:
+
+```bash
+NOVA_DIST_DIR=$HOME/v2rayN-WebUI-Nova/dist ./v2rayn-webapi-rs
+```
+
+The `/api/*` router keeps priority; every other path is served from that directory with an SPA fallback to `index.html`. Path traversal, backslashes and NUL bytes are rejected. When the variable is unset the process stays API-only. Without same-origin hosting, an HTTPS-served Nova build cannot call the loopback HTTP API (mixed content / Private Network Access), and CORS cannot override that.
 
 ## Termux acceptance (not covered by CI)
 
