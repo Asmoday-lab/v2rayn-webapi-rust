@@ -109,6 +109,13 @@ NOVA_DIST_DIR=$HOME/v2rayN-WebUI-Nova/dist ./v2rayn-webapi-rs
 
 The `/api/*` router keeps priority; every other path is served from that directory with an SPA fallback to `index.html`. Path traversal, backslashes and NUL bytes are rejected. When the variable is unset the process stays API-only. Without same-origin hosting, an HTTPS-served Nova build cannot call the loopback HTTP API (mixed content / Private Network Access), and CORS cannot override that.
 
+## Termux deployment
+
+See [docs/TERMUX.md](docs/TERMUX.md) for the full setup: static artifact
+installation, Nova same-origin hosting, the Android PIE trap for core binaries,
+explicit DNS, and wakelock / battery optimization. `scripts/termux-run.sh` is a
+ready-to-use launcher with wakelock acquisition.
+
 ## Termux acceptance (not covered by CI)
 
 CI cannot prove these; they need a real device:
