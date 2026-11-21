@@ -261,11 +261,10 @@ async fn stop_inner(state: &AppState) -> Response {
         let _ = child.kill().await;
     }
     *state.core.pid.lock().unwrap() = None;
-    // C# returns success even when nothing was running (idempotent stop).
-    ok(
-        "core.stopped",
-        json!({"runtimeState": "Stopped", "processIds": []}),
-    )
+    // C# StopCoreAsync returns an OperationView with data=null, and succeeds
+    // even when nothing was running (idempotent stop). Keep data=null for
+    // byte-exact differential parity; live state is available at /core/status.
+    ok("core.stopped", json!(null))
 }
 
 /// POST /api/core/restart
