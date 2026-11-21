@@ -4,9 +4,9 @@
   "oracle": {
     "repository": "2dust/v2rayN",
     "branch": "master",
-    "commit": "9bb74a097b50e76ed490444bf56b20bbea6746f7",
-    "commit_date": "2026-11-19T11:15:30Z",
-    "commit_message": "Fix (#10640)",
+    "commit": "5bbab5018244b4f0af3d33d70b34d062a66f48d2",
+    "commit_date": "2026-11-21T02:50:11Z",
+    "commit_message": "up 8.0.0",
     "contract_paths": [
       "v2rayN/v2rayN.WebAPI/Api/WebApiEndpoints.cs",
       "v2rayN/v2rayN.WebAPI/Api/WebAuthEndpoints.cs",
