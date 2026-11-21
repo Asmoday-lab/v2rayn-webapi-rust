@@ -87,8 +87,16 @@ expected="x-v2rayn-webapi-core-process-ids x-v2rayn-webapi-core-profile-id x-v2r
 [[ "$health_headers" == "$expected" ]] && ok "5 health diagnostic headers present" || bad "health headers differ: $health_headers"
 
 info "3. auth chain"
+# /api/setup/status is a bare DTO (mirrors the C# oracle), not an envelope.
+# With V2RAYN_WEB_API_KEY pre-set the expected shape is:
+#   {"environmentKeyConfigured":true,"setupAllowedFromThisRequest":true,"setupRequired":false}
 setup_status="$(curl -sS --noproxy '*' "$base/api/setup/status")"
-echo "$setup_status" | grep -q '"success":true' && ok "GET /api/setup/status readable pre-auth" || bad "setup/status: $setup_status"
+if printf '%s' "$setup_status" | grep -q '"setupRequired":false' \
+   && printf '%s' "$setup_status" | grep -q '"environmentKeyConfigured":true'; then
+  ok "GET /api/setup/status readable pre-auth (key configured, setup not required)"
+else
+  bad "setup/status: $setup_status"
+fi
 
 bad_login="$(curl -sS --noproxy '*' -o /dev/null -w '%{http_code}' -X POST "$base/api/auth/login" -H 'Content-Type: application/json' --data '{"key":"wrong-wrong-wrong"}')"
 [[ "$bad_login" == "401" ]] && ok "login with wrong key -> 401" || bad "login wrong key -> $bad_login (want 401)"
@@ -117,8 +125,15 @@ if [[ -n "$nova_dist" && -f "$nova_dist/index.html" ]]; then
   index_code="$(curl -sS --noproxy '*' -o "$tmp/index.html" -w '%{http_code}' "$base/")"
   [[ "$index_code" == "200" ]] && ok "GET / serves Nova index.html" || bad "GET / -> $index_code"
   curl -sS --noproxy '*' "$base/" | grep -qi '<html' && ok "index.html looks like HTML" || bad "index.html body is not HTML"
-  traversal="$(curl -sS --noproxy '*' -o /dev/null -w '%{http_code}' "$base/../../etc/passwd")"
-  [[ "$traversal" != "200" ]] && ok "path traversal rejected ($traversal)" || bad "path traversal returned 200"
+  # curl normally collapses ../ client-side; --path-as-is sends it verbatim.
+  # The SPA fallback intentionally answers unknown paths with index.html (200),
+  # so status alone is not a signal -- assert no file content is disclosed.
+  traversal_body="$(curl -sS --path-as-is --noproxy '*' "$base/../../etc/passwd")"
+  if printf '%s' "$traversal_body" | grep -q 'root:x:0:0'; then
+    bad "path traversal leaked /etc/passwd"
+  else
+    ok "path traversal disclosed no file content (SPA fallback)"
+  fi
 else
   echo "  [SKIP] NOVA_DIST_DIR unset or no index.html"
 fi

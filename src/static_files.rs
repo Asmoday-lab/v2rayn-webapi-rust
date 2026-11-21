@@ -57,7 +57,22 @@ async fn body(path: &Path) -> Option<Response> {
 }
 
 /// Serve a file from `root`, falling back to `index.html` for SPA routes.
+/// `/api/*` is deliberately NOT caught by the SPA fallback: an unimplemented
+/// API route must return a JSON 404 envelope, never index.html, or the Nova
+/// client will try to parse HTML as JSON and fail with an opaque error.
 pub async fn serve(root: &Path, uri: Uri) -> Response {
+    if uri.path().starts_with("/api/") || uri.path() == "/api" {
+        return (
+            StatusCode::NOT_FOUND,
+            axum::Json(serde_json::json!({
+                "success": false,
+                "code": "not_found",
+                "messageKey": "errors.notFound",
+                "data": null
+            })),
+        )
+            .into_response();
+    }
     let relative = uri.path().trim_start_matches('/');
     if let Some(target) = resolve(root, relative) {
         if target.is_file() {
@@ -111,6 +126,30 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(&bytes[..], b"<html>ok</html>");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn api_routes_never_serve_spa_html() {
+        let dir = std::env::temp_dir().join(format!("nova-api-fallback-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(dir.join("index.html"), b"<html>ok</html>").unwrap();
+        for path in ["/api/unimplemented", "/api", "/api/settings/dns/profiles"] {
+            let resp = serve(&dir, path.parse().unwrap()).await;
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "path={path}");
+            let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let body = String::from_utf8(bytes.to_vec()).unwrap();
+            assert!(
+                !body.contains("<html"),
+                "path={path} leaked SPA HTML: {body}"
+            );
+            assert!(
+                body.contains("\"code\":\"not_found\""),
+                "path={path}: {body}"
+            );
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
