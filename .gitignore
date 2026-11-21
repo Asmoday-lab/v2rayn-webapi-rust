@@ -13,3 +13,6 @@ __pycache__/
 /tmp-*/
 /data/
 data.json
+
+/release-aarch64.zip
+/release-unpack/

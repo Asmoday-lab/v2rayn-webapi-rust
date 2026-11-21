@@ -6,6 +6,7 @@
 //! origin guard → rate limit → session auth).
 
 mod auth;
+mod child_process;
 mod core;
 mod crud;
 mod endpoints;

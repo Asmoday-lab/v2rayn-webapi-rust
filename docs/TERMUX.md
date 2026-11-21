@@ -184,8 +184,30 @@ export V2RAYN_CORE_BIN="$(command -v sing-box)"     # optional; default sing-box
 bash scripts/termux-run.sh                          # forwards both env vars
 ```
 
-Still out of scope (return JSON 404 / no-op): subscription content fetching
-(share URLs are stored, not downloaded), active speed/latency tests, backup /
+### Android seccomp: why we do not use `std::process::Command`
+
+On Termux, the first real `POST /api/core/start` killed the API process outright
+(no panic, no log line; the shell reported `EXIT=159`, i.e. signal 31). A
+`strace -f` trace identified the exact cause:
+
+```text
+clone(CLONE_VM|CLONE_VFORK|SIGCHLD) = 16986        # child exec'd fine
+--- SIGSYS { si_code=SYS_SECCOMP, si_syscall=__NR_pidfd_open } ---
++++ killed by SIGSYS +++                           # every API thread
+```
+
+Rust's `std::process::Command` (and `tokio::process::Command`) opens a `pidfd`
+for each child on Linux. Android's seccomp-bpf filter denies `pidfd_open` for
+ordinary apps and kills the **whole process**, not just the syscall. The
+`sing-box` child itself was healthy — the parent died after spawning it.
+
+`src/child_process.rs` therefore calls musl/bionic `posix_spawn()` directly
+(`clone(CLONE_VM|CLONE_VFORK|SIGCHLD)`, which *is* allowed) and tracks the child
+with `waitpid`/`kill`. No `pidfd_open`, no extra dependency, and the release
+binary remains a static aarch64-musl ELF. Do not replace this with
+`Command::new()` — it will silently break Core start on every Android device.
+
+Still out of scope (return JSON 404 / no-op): subscription content fetching(share URLs are stored, not downloaded), active speed/latency tests, backup /
 WebDAV restore, core/web self-updates, and geo file updates. Full routing-rule
 and DNS-profile *editing* CRUD is implemented for the common fields; exotic
 protocol-specific extras round-trip as stored JSON but are not individually
@@ -248,11 +270,10 @@ Without a wakelock the process typically dies within minutes of screen off.
 
 ## Current limitations
 
-- The Rust API currently implements deterministic headless responses for core
-  lifecycle endpoints (`POST /api/core/start` and `/api/core/restart` return
-  the pinned oracle's no-profile / not-running errors). **Real core process
-  launch and config generation are not implemented yet**, so Nova can manage
-  profiles/settings but cannot actually start a proxy connection today.
+- Core lifecycle is real now: `POST /api/core/start` writes a sing-box config
+  and launches the core; stop/restart/status manage the live child PID. Only
+  the common protocol outbounds are generated; exotic protocol fields in a
+  profile are not yet translated into sing-box JSON.
 - The API binds to loopback only. Remote access requires a reverse proxy or an
   SSH tunnel; do not expose the plain HTTP listener directly.
 - These device-specific behaviours are not covered by CI and need a real

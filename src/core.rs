@@ -8,6 +8,7 @@
 //! start/stop/restart/status. `V2RAYN_DATA_HOME/binConfigs/config.json` mirrors
 //! the C# layout so the config can be inspected after launch.
 
+use crate::child_process::{SpawnedChild, spawn};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -15,12 +16,13 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 use std::sync::Mutex;
-use tokio::process::Child;
 
 /// Live core process. `Mutex` is fine: start/stop are serialized and the lock
-/// is never held across an await.
+/// is never held across an await. We deliberately use raw `posix_spawn`
+/// instead of `std/tokio::process::Command`: the latter calls `pidfd_open`,
+/// which Android's seccomp denies with SIGSYS (kills the whole API process).
 pub struct CoreHandle {
-    child: Mutex<Option<Child>>,
+    child: Mutex<Option<SpawnedChild>>,
     pid: Mutex<Option<u32>>,
 }
 
@@ -221,14 +223,15 @@ async fn start_inner(state: &AppState) -> Response {
     };
 
     let bin = core_bin();
-    let child = match tokio::process::Command::new(&bin)
-        .args(["run", "-c"])
-        .arg(&config_path)
-        .arg("--disable-color")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    {
+    let child = match spawn(
+        &bin,
+        &[
+            "run",
+            "-c",
+            config_path.to_string_lossy().as_ref(),
+            "--disable-color",
+        ],
+    ) {
         Ok(c) => c,
         Err(e) => {
             return fail(
@@ -258,7 +261,7 @@ async fn stop_inner(state: &AppState) -> Response {
     // Drop the guard on this statement so it is never held across `.await`.
     let child = state.core.child.lock().unwrap().take();
     if let Some(mut child) = child {
-        let _ = child.kill().await;
+        let _ = child.kill();
     }
     *state.core.pid.lock().unwrap() = None;
     // C# StopCoreAsync returns an OperationView with data=null, and succeeds
