@@ -59,6 +59,84 @@ For a repeatable launch including wakelock, use the helper script:
 bash scripts/termux-run.sh
 ```
 
+## Accessing from a workstation browser
+
+The API binds **loopback only** (`127.0.0.1:5080` on the phone). The device's
+Wi-Fi address (e.g. `192.168.1.5`) is *not* listening, so opening
+`http://192.168.1.5:5080/` from a PC gets a connection refusal. Android also
+filters inbound connections to Termux, and some routers isolate Wi-Fi clients.
+Use an SSH local forward instead — it terminates on the phone's own loopback
+and reaches the browser as the same origin:
+
+```sh
+ssh -N -o BatchMode=yes -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 -L 5080:127.0.0.1:5080 mi5x
+```
+
+Then open **http://127.0.0.1:5080/** on the PC and fill the Nova login form:
+
+| Field | Value |
+| --- | --- |
+| Backend API 地址 | **Leave empty.** Nova is served from this exact origin, so its same-origin default is correct. Explicit `http://127.0.0.1:5080` also works. |
+| 管理密钥 | The value of `V2RAYN_WEB_API_KEY` used by `termux-run.sh` (on the recorded device: `ondevice-verification-key-1234`). |
+
+Do not enter `192.168.1.5`, `localhost:5081`, or the SSH host name: a
+different origin would require `V2RAYN_WEB_ALLOWED_ORIGINS` and would reintroduce
+CORS / Mixed Content / Private Network Access problems. The WiFi icon in the
+form is only a connectivity test; it does not substitute for the management key.
+
+`scripts/pc-tunnel.sh` starts the same forward if you prefer a script.
+
+## Serving Nova from an existing nginx (aggregation page)
+
+When the device already runs nginx as the LAN entry point, keep the API as the
+loopback-only process and let nginx own the public origin. Run
+`scripts/termux-nginx-deploy.py` on the device after each Nova rebuild:
+
+```sh
+python3 ~/v2rayn-nova/termux-nginx-deploy.py
+nginx -t -p "$HOME/.nginx" -c "$HOME/.config/nginx/nginx.conf"
+nginx -s reload -p "$HOME/.nginx" -c "$HOME/.config/nginx/nginx.conf"
+```
+
+It copies `~/v2rayn-nova/nova-dist` to `~/.config/nginx/html/nova/`, injects
+`<base href="/nova/">` so Vue history-mode deep links still resolve their
+relative chunks, adds the Nova card to the aggregation page, and inserts two
+locations into the existing `nginx.conf` (CRLF preserved, idempotent):
+
+```nginx
+location /nova/ {
+    root   /data/data/com.termux/files/home/.config/nginx/html;
+    index  index.html;
+    try_files $uri $uri/ /nova/index.html;
+}
+location /api/ {
+    proxy_pass http://127.0.0.1:5080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;   # must forward: Origin guard compares against Host
+    proxy_buffering off;                # SSE on /api/events
+    proxy_read_timeout 3600s;
+}
+```
+
+`proxy_set_header Host $http_host` is the load-bearing line: the API's
+`is_same_origin()` accepts a request when `Origin == http://<Host>`. Forwarding
+the browser's original Host makes the nginx-proxied call same-origin, so no
+`V2RAYN_WEB_ALLOWED_ORIGINS` entry or `apiBaseUrl` change is needed — the shipped
+`webui-config.js` already has `apiBaseUrl: ''`. A foreign Origin is still 403.
+
+Nova is then available at `http://192.168.1.5:8080/nova/` (or the device's
+current LAN IP / `alisa.v6.rocks`), and the API's own same-origin hosting on
+`:5080` stays available for the SSH-tunnel path. Both coexist; only one needs
+to be used. Back up `nginx.conf` and the portal `index.html` before first run
+(the script is idempotent but does overwrite `html/nova/` on every rebuild).
+
+**Prefer the nginx path over the SSH tunnel.** nginx binds `0.0.0.0:8080`, so a
+workstation on the same LAN can reach `http://<device-ip>:8080/nova/` directly —
+no tunnel, and it survives Wi-Fi sleep that resets an idle SSH session
+(`Connection reset by peer`). The tunnel below is only a fallback for when no
+LAN route exists. Keep the login values the same.
+
 ## Same-origin requirement
 
 Do **not** serve Nova from an HTTPS origin while the API listens on plain HTTP
@@ -66,6 +144,52 @@ localhost. That is mixed content / Private Network Access, and CORS cannot
 override it. Either use the same-origin hosting above, or put both behind one
 reverse proxy. The API's Origin guard and CORS already accept same-origin
 requests.
+
+## Real persistence and Core management
+
+The original headless build returned deterministic golden/no-op responses: Nova
+could log in and render, but writes did nothing and the data directory stayed
+empty. The current build replaces those with a real store and real Core control:
+
+- **Store**: `V2RAYN_DATA_HOME/data.json` (default `./data`). A single pretty
+  JSON document written atomically (temp + rename). A fresh/missing file is
+  seeded from the embedded golden DTOs, so an empty install answers exactly like
+  the pinned C# oracle — that is what keeps the CI differential suite green.
+- **CRUD**: subscriptions and profiles (create/read/update/delete/select), plus
+  settings sections (inbound/core/application/speedtest/routing/apply), DNS
+  simple + profiles, WebDAV, and core templates now read/write the store.
+- **Core**: `POST /api/core/start` generates a sing-box config from the
+  selected profile + settings into `V2RAYN_DATA_HOME/binConfigs/config.json`,
+  then spawns the core with `run -c <path> --disable-color`. Stop/restart/status
+  manage the live child PID. Override the binary with `V2RAYN_CORE_BIN`
+  (default `sing-box`). Supported outbounds: VMess, Shadowsocks, VLESS, Trojan,
+  Hysteria2, TUIC, WireGuard; SOCKS fallback for unknown types.
+
+Wire shapes stay camelCase `ApiEnvelope<T>` and the security chain is unchanged.
+The differential corpus still asserts the exact failure codes on empty/invalid
+input (verified locally: 13/13 GET golden parity, 11/11 write-case parity).
+
+On-device preparation:
+
+```sh
+pkg install sing-box -y           # 1.14.4, android/arm64 PIE
+readelf -h "$(command -v sing-box)" | grep 'Type:'   # want DYN (PIE)
+```
+
+Launcher env additions:
+
+```sh
+export V2RAYN_DATA_HOME="$HOME/v2rayn-nova/data"   # persists across restarts
+export V2RAYN_CORE_BIN="$(command -v sing-box)"     # optional; default sing-box
+bash scripts/termux-run.sh                          # forwards both env vars
+```
+
+Still out of scope (return JSON 404 / no-op): subscription content fetching
+(share URLs are stored, not downloaded), active speed/latency tests, backup /
+WebDAV restore, core/web self-updates, and geo file updates. Full routing-rule
+and DNS-profile *editing* CRUD is implemented for the common fields; exotic
+protocol-specific extras round-trip as stored JSON but are not individually
+validated against every C# rule.
 
 ## Core binaries: the PIE trap
 

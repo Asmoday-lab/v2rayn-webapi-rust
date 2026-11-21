@@ -47,10 +47,6 @@ pub async fn stop_latency() -> Response {
     ok("common.completed", json!(null))
 }
 
-pub async fn core_stop() -> Response {
-    ok("core.stopped", json!(null))
-}
-
 pub async fn profiles_deduplicate() -> Response {
     ok("profiles.deduplicated", json!({"removed": 0}))
 }
@@ -110,16 +106,6 @@ pub async fn generate_all_groups() -> Response {
         "profiles.grouped",
         json!(null),
         StatusCode::BAD_REQUEST,
-    )
-}
-
-pub async fn profile_select() -> Response {
-    operation(
-        false,
-        "profile_not_found",
-        "profiles.notFound",
-        json!(null),
-        StatusCode::CONFLICT,
     )
 }
 

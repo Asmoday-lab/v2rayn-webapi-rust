@@ -100,9 +100,14 @@ CI-only).
     bash scripts/termux-run.sh
   ```
 
-- [ ] Open `http://127.0.0.1:5080/` in the device browser (same origin as API).
+- [ ] Open `http://127.0.0.1:5080/` (on the device, or through
+      `scripts/pc-tunnel.sh` from a workstation — the phone's LAN IP is not
+      listening because the API binds loopback only).
 - [ ] First-run setup screen appears if no key was pre-set; complete setup.
-- [ ] Login with the management key succeeds (no CORS/mixed-content error in
+- [ ] In the Nova login form leave **Backend API 地址 empty** (same-origin) and
+      enter the `V2RAYN_WEB_API_KEY` value in **管理密钥**. Do not use the
+      device IP: that is a different origin and would need CORS/PNA changes.
+      Login with the management key succeeds (no CORS/mixed-content error in
       browser console). If console shows `Mixed Content` or `Private Network
       Access`, Nova is NOT being served from the API origin — go back to step 3
       launch command; do not try to "fix" it with CORS.

@@ -6,13 +6,17 @@
 //! origin guard → rate limit → session auth).
 
 mod auth;
+mod core;
+mod crud;
 mod endpoints;
 mod events;
 mod mutations;
 mod security;
 mod session;
+mod settings_crud;
 mod state;
 mod static_files;
+mod store;
 mod validation;
 
 use axum::extract::ConnectInfo;
@@ -60,6 +64,7 @@ async fn main() {
         .route("/api/editor-options", get(endpoints::editor_options))
         .route("/api/subscriptions", get(endpoints::subscriptions))
         .route("/api/profiles", get(endpoints::profiles))
+        .route("/api/profiles/{indexId}", get(crud::profile_get))
         .route("/api/settings", get(endpoints::settings))
         .route("/api/settings/webdav", get(endpoints::webdav_settings))
         .route("/api/settings/dns/simple", get(endpoints::dns_simple))
@@ -90,7 +95,7 @@ async fn main() {
         .route("/api/statistics", delete(mutations::clear_statistics))
         .route("/api/speedtests", delete(mutations::stop_speedtests))
         .route("/api/latency/stop", post(mutations::stop_latency))
-        .route("/api/core/stop", post(mutations::core_stop))
+        .route("/api/core/stop", post(core::core_stop))
         .route(
             "/api/profiles/deduplicate",
             post(mutations::profiles_deduplicate),
@@ -115,27 +120,37 @@ async fn main() {
             "/api/subscriptions/update",
             post(mutations::subscription_update),
         )
-        .route("/api/profiles/{id}/select", post(mutations::profile_select))
+        .route("/api/profiles/{id}/select", post(crud::profile_select))
         // Deterministic validation failures (no Core/IO side effects).
         .route("/api/profiles/import", post(validation::profile_import))
         .route(
             "/api/settings/routing-profiles/{id}/rules/import",
             post(validation::routing_rules_import),
         )
-        .route("/api/settings/routing", put(validation::routing_strategy))
-        .route("/api/settings/application", put(validation::app_settings))
-        .route("/api/settings/inbound", put(validation::inbound_settings))
+        .route("/api/settings/routing", put(settings_crud::routing))
+        .route("/api/settings/application", put(settings_crud::application))
+        .route("/api/settings/inbound", put(settings_crud::inbound))
+        .route("/api/settings/speedtest", put(settings_crud::speedtest))
+        .route("/api/settings/core", put(settings_crud::core))
+        .route("/api/settings/core-types", put(settings_crud::core_types))
+        .route("/api/settings/apply", put(settings_crud::apply))
+        .route("/api/settings/dns/simple", put(settings_crud::dns_simple))
+        .route("/api/settings/webdav", put(settings_crud::webdav))
         .route(
-            "/api/settings/speedtest",
-            put(validation::speedtest_settings),
+            "/api/settings/dns/profiles/{coreType}",
+            put(settings_crud::dns_profile_upsert),
         )
-        .route("/api/subscriptions", post(validation::subscription_create))
+        .route("/api/subscriptions", post(crud::subscription_create))
         .route(
             "/api/subscriptions/{id}",
-            delete(validation::subscription_delete),
+            put(crud::subscription_update).delete(crud::subscription_delete),
         )
         .route("/api/profiles/sort", post(validation::profiles_sort))
-        .route("/api/profiles", delete(validation::profiles_delete))
+        .route(
+            "/api/profiles",
+            post(crud::profile_create).delete(crud::profile_delete),
+        )
+        .route("/api/profiles/{indexId}", put(crud::profile_update))
         .route(
             "/api/settings/routing-profiles/{id}/rules/import-url",
             post(validation::routing_rules_import_url),
@@ -146,8 +161,9 @@ async fn main() {
         )
         .route("/api/profiles/copy", post(validation::profiles_copy))
         .route("/api/speedtests", post(validation::speedtests_start))
-        .route("/api/core/start", post(validation::core_start))
-        .route("/api/core/restart", post(validation::core_restart))
+        .route("/api/core/start", post(core::core_start))
+        .route("/api/core/restart", post(core::core_restart))
+        .route("/api/core/status", get(core::core_status))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             security_middleware,

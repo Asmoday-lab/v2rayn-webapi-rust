@@ -126,6 +126,8 @@ pub struct AppState {
     pub allowed_origins: Vec<String>,
     pub rate_limiter: std::sync::Arc<RateLimiter>,
     pub instance_pid: u32,
+    pub store: std::sync::Arc<crate::store::Store>,
+    pub core: std::sync::Arc<crate::core::CoreHandle>,
 }
 
 impl AppState {
@@ -164,6 +166,10 @@ impl AppState {
             allowed_origins,
             rate_limiter: std::sync::Arc::new(RateLimiter::default()),
             instance_pid: std::process::id(),
+            store: std::sync::Arc::new(crate::store::Store::open(
+                &crate::store::data_home_from_env(),
+            )),
+            core: std::sync::Arc::new(crate::core::CoreHandle::new()),
         }
     }
 
@@ -176,6 +182,10 @@ impl AppState {
             allowed_origins: allowed_origins.to_vec(),
             rate_limiter: std::sync::Arc::new(RateLimiter::default()),
             instance_pid: 0,
+            store: std::sync::Arc::new(crate::store::Store::open(
+                &std::env::temp_dir().join(format!("nova-state-tests-{}", std::process::id())),
+            )),
+            core: std::sync::Arc::new(crate::core::CoreHandle::new()),
         }
     }
 }

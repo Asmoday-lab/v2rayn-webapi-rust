@@ -38,52 +38,9 @@ pub async fn routing_rules_import() -> Response {
     invalid("routing_rules_json_invalid", "routing.rulesInvalid")
 }
 
-/// `PUT /api/settings/routing` with an unsupported strategy.
-pub async fn routing_strategy() -> Response {
-    invalid(
-        "routing_strategy_invalid",
-        "settings.invalidRoutingStrategy",
-    )
-}
-
-/// `PUT /api/settings/application` with a negative geo-update interval.
-pub async fn app_settings() -> Response {
-    invalid("app_setting_invalid", "errors.invalidInput")
-}
-
-/// `PUT /api/settings/inbound` with localPort = 0.
-pub async fn inbound_settings() -> Response {
-    invalid("inbound_port_invalid", "settings.invalidPort")
-}
-
-/// `PUT /api/settings/speedtest` with speedTestTimeout = 0.
-pub async fn speedtest_settings() -> Response {
-    invalid("speedtest_settings_invalid", "settings.invalidSpeedTest")
-}
-
-/// `POST /api/subscriptions` with an empty remarks field.
-pub async fn subscription_create() -> Response {
-    invalid("subscription_name_required", "subscriptions.nameRequired")
-}
-
-/// `DELETE /api/subscriptions/{missing}` — endpoint uses 404 for not-found.
-pub async fn subscription_delete() -> Response {
-    fail(
-        "subscription_not_found",
-        "subscriptions.notFound",
-        json!(null),
-        StatusCode::NOT_FOUND,
-    )
-}
-
 /// `POST /api/profiles/sort` with an unparseable EServerColName.
 pub async fn profiles_sort() -> Response {
     invalid("profile_sort_column_invalid", "errors.invalidInput")
-}
-
-/// `DELETE /api/profiles` with an empty profileIds array.
-pub async fn profiles_delete() -> Response {
-    invalid("profile_selection_required", "profiles.selectRequired")
 }
 
 /// `POST /api/settings/routing-profiles/{missing}/rules/import-url`.
@@ -110,26 +67,6 @@ pub async fn speedtests_start() -> Response {
     )
 }
 
-/// `POST /api/core/start` on a fresh install: no default profile is selected.
-pub async fn core_start() -> Response {
-    fail(
-        "profile_not_selected",
-        "profiles.noneSelected",
-        json!(null),
-        StatusCode::CONFLICT,
-    )
-}
-
-/// `POST /api/core/restart` with no running core (enum ToString keeps casing).
-pub async fn core_restart() -> Response {
-    fail(
-        "core_not_running",
-        "core.notRunning",
-        json!({"runtimeState": "Stopped", "processIds": []}),
-        StatusCode::CONFLICT,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,14 +76,7 @@ mod tests {
         let cases = [
             (profile_import().await, "profile_content_required"),
             (routing_rules_import().await, "routing_rules_json_invalid"),
-            (routing_strategy().await, "routing_strategy_invalid"),
-            (app_settings().await, "app_setting_invalid"),
-            (inbound_settings().await, "inbound_port_invalid"),
-            (speedtest_settings().await, "speedtest_settings_invalid"),
-            (subscription_create().await, "subscription_name_required"),
-            (subscription_delete().await, "subscription_not_found"),
             (profiles_sort().await, "profile_sort_column_invalid"),
-            (profiles_delete().await, "profile_selection_required"),
             (
                 routing_rules_import_url().await,
                 "routing_profile_not_found",
@@ -157,8 +87,6 @@ mod tests {
                 speedtests_start().await,
                 "speedtest_profile_selection_required",
             ),
-            (core_start().await, "profile_not_selected"),
-            (core_restart().await, "core_not_running"),
         ];
         for (resp, expected_code) in cases {
             assert!(resp.status().is_client_error());
@@ -171,10 +99,5 @@ mod tests {
             assert!(value["messageKey"].is_string());
             assert!(value.get("data").is_some());
         }
-    }
-
-    #[tokio::test]
-    async fn not_found_uses_404() {
-        assert_eq!(subscription_delete().await.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -6,7 +6,9 @@
 //! envelope's messageKey varies per endpoint. Runtime-dependent endpoints
 //! (`status`, `logs`, `web-updates`) are handled separately.
 
+use crate::state::AppState;
 use axum::Json;
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
@@ -38,11 +40,8 @@ pub async fn profile_groups() -> Response {
     )
 }
 
-pub async fn webdav_settings() -> Response {
-    ok(
-        static_data(include_str!("../resources/webdav_settings.json")),
-        "backup.webdavSettingsLoaded",
-    )
+pub async fn webdav_settings(State(state): State<AppState>) -> Response {
+    ok(state.store.object("webdav"), "backup.webdavSettingsLoaded")
 }
 
 pub async fn core_updates() -> Response {
@@ -99,39 +98,33 @@ pub async fn dns_defaults() -> Response {
     )
 }
 
-pub async fn dns_profiles() -> Response {
+pub async fn dns_profiles(State(state): State<AppState>) -> Response {
     ok(
-        static_data(include_str!("../resources/dns_profiles.json")),
+        Value::Array(state.store.array("dnsProfiles")),
         "dns.profilesLoaded",
     )
 }
 
-pub async fn routing_profiles() -> Response {
+pub async fn routing_profiles(State(state): State<AppState>) -> Response {
     ok(
-        static_data(include_str!("../resources/routing_profiles.json")),
+        Value::Array(state.store.array("routingProfiles")),
         "routing.profilesLoaded",
     )
 }
 
-pub async fn core_templates() -> Response {
+pub async fn core_templates(State(state): State<AppState>) -> Response {
     ok(
-        static_data(include_str!("../resources/core_templates.json")),
+        Value::Array(state.store.array("coreTemplates")),
         "coreTemplates.loaded",
     )
 }
 
-pub async fn settings() -> Response {
-    ok(
-        static_data(include_str!("../resources/settings.json")),
-        "settings.loaded",
-    )
+pub async fn settings(State(state): State<AppState>) -> Response {
+    ok(state.store.object("settings"), "settings.loaded")
 }
 
-pub async fn dns_simple() -> Response {
-    ok(
-        static_data(include_str!("../resources/dns_simple.json")),
-        "dns.simpleLoaded",
-    )
+pub async fn dns_simple(State(state): State<AppState>) -> Response {
+    ok(state.store.object("dnsSimple"), "dns.simpleLoaded")
 }
 
 /// `/api/status`: static baseline from the oracle with three runtime-dependent
@@ -162,14 +155,30 @@ pub fn status(version: &str) -> Response {
     ok(data, "status.loaded")
 }
 
-/// `/api/subscriptions` and `/api/profiles` return empty lists on a fresh
-/// data directory. Termux deployment starts empty too, so this is accurate.
-pub async fn subscriptions() -> Response {
-    ok(json!([]), "subscriptions.loaded")
+/// `/api/subscriptions` and `/api/profiles` read the persistent store. A fresh
+/// store is empty, which stays byte-identical with the oracle's fresh data dir;
+/// a populated device now returns the real rows Nova created through CRUD.
+/// Optional `subscriptionId` query filters profiles to one group.
+pub async fn subscriptions(State(state): State<AppState>) -> Response {
+    ok(
+        Value::Array(state.store.array("subscriptions")),
+        "subscriptions.loaded",
+    )
 }
 
-pub async fn profiles() -> Response {
-    ok(json!([]), "profiles.loaded")
+pub async fn profiles(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let rows = state.store.array("profiles");
+    let filtered = match params.get("subscriptionId").filter(|s| !s.is_empty()) {
+        Some(sub_id) => rows
+            .into_iter()
+            .filter(|p| p.get("subid").and_then(Value::as_str) == Some(sub_id.as_str()))
+            .collect(),
+        None => rows,
+    };
+    ok(Value::Array(filtered), "profiles.loaded")
 }
 
 #[cfg(test)]
@@ -178,26 +187,19 @@ mod tests {
 
     #[tokio::test]
     async fn all_embedded_resources_parse() {
-        // Touch every static_data path through its accessor; a panic here means
-        // a resource file was corrupted.
+        // Every embedded golden must parse. Store-seeded resources (settings,
+        // dns*, routing*, templates, webdav) are validated in store::tests;
+        // this covers the ones still served directly.
         let responses = [
             operations().await,
             profile_groups().await,
-            webdav_settings().await,
             core_updates().await,
             core_update_progress().await,
             editor_options().await,
             dns_editor_options().await,
             dns_defaults().await,
-            dns_profiles().await,
-            routing_profiles().await,
-            core_templates().await,
-            settings().await,
-            dns_simple().await,
-            subscriptions().await,
-            profiles().await,
         ];
-        assert_eq!(responses.len(), 15);
+        assert_eq!(responses.len(), 7);
     }
 
     #[test]
