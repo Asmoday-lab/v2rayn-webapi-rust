@@ -16,3 +16,5 @@ data.json
 
 /release-aarch64.zip
 /release-unpack/
+/release-aarch64-fixed.zip
+/release-fixed-unpack/
