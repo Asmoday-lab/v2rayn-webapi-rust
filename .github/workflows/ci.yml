@@ -169,8 +169,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          api=https://api.github.com/repos/2dust/v2rayN/commits/master
-          upstream=$(curl -fsSL "$api" | python3 -c 'import json,sys;print(json.load(sys.stdin)["sha"])')
+          api=$(python3 -c 'import json;o=json.load(open("oracle.lock"))["oracle"];print("https://api.github.com/repos/{}/commits/{}".format(o["repository"],o["branch"]))')
+          # Anonymous GitHub API calls are rate-limited to 60/h and were returning
+          # 403 here, crashing the JSON parse. Use the workflow token; if the
+          # query still fails, warn and skip rather than turning CI red.
+          if ! upstream=$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "$api" 2>/dev/null \
+              | python3 -c 'import json,sys;print(json.load(sys.stdin)["sha"])'); then
+            echo "::warning::could not query upstream HEAD (API unavailable or rate-limited); skipping drift check"
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           pinned=$(python3 -c 'import json;print(json.load(open("oracle.lock"))["oracle"]["commit"])')
           echo "upstream=$upstream"
           echo "pinned=$pinned"
