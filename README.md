@@ -111,19 +111,36 @@ The `/api/*` router keeps priority; every other path is served from that directo
 
 ## Termux deployment
 
-See [docs/TERMUX.md](docs/TERMUX.md) for the full setup: static artifact
-installation, Nova same-origin hosting, the Android PIE trap for core binaries,
-explicit DNS, and wakelock / battery optimization. `scripts/termux-run.sh` is a
-ready-to-use launcher with wakelock acquisition.
+See [docs/TERMUX.md](docs/TERMUX.md) for the full setup: artifact install,
+Nova same-origin hosting, the Android PIE trap for core binaries, explicit DNS,
+and wakelock / battery optimization. `scripts/termux-run.sh` is a ready-to-use
+launcher with wakelock acquisition.
+
+There is no separate release workflow: the shipping artifact is produced only
+by the `build-aarch64-musl` CI job (**release builds are CI-only by policy**).
+Download `v2rayn-webapi-rs-aarch64-musl.zip` from any successful run and record
+its run id + commit SHA.
 
 ## Termux acceptance (not covered by CI)
 
-CI cannot prove these; they need a real device:
+CI cannot prove native execution, browser login, or screen-off survival. The
+on-device procedure is in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md); the automated
+part is `scripts/termux-smoke.sh` (run it with `API_BIN` and `NOVA_DIST_DIR`
+set). It covers:
 
-1. DNS resolution (Android has no `/etc/resolv.conf`; plan: hickory with explicit upstream or route through core's socks outbound).
-2. Core binary `execve` works (Xray may ship as non-PIE `ET_EXEC` and be rejected by the Android linker).
-3. Wakelock / battery-optimization exemption keeps both processes alive with screen off.
-4. Nova `dist/` served from the same origin as the API, or a same-origin reverse proxy — otherwise HTTPS→HTTP localhost hits mixed-content / Private Network Access and CORS cannot override it.
+1. Static ELF actually `execve`s on Android/Bionic (no proot, no root).
+2. Full local auth chain + 5 health diagnostic headers + Nova same-origin load.
+3. Wakelock / battery-optimization survival with screen off.
+4. Device-specific DNS caveats.
+
+## Known limitations (not smoke failures)
+
+- Core process management (Xray + sing-box) is **not implemented**:
+  `POST /api/core/start` / `restart` return the oracle's deterministic
+  `409` errors. Nova can browse/manage but cannot open a proxy connection yet.
+- Real persistence of profiles/subscriptions/settings is **not implemented**;
+  writes are deterministic no-op/error paths and do not survive restart.
+- The API binds loopback only; WAN access needs an SSH tunnel or reverse proxy.
 
 ## Contract tracking
 
