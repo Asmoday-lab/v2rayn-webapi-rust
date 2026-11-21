@@ -30,7 +30,9 @@ trap cleanup EXIT HUP INT TERM
 
 wait_health() {
   local url="$1" label="$2" pid="$3" log="$4" ok=0
-  for _ in $(seq 1 120); do
+  # A cold .NET oracle can take over a minute to reach /api/health on a fresh
+  # runner (first-run JIT / NuGet restore). 60 attempts x 0.5s was too tight.
+  for _ in $(seq 1 300); do
     if curl -fsS --noproxy '*' "$url/api/health" 2>/dev/null | grep -q '"status":"ok"'; then
       ok=1
       break
