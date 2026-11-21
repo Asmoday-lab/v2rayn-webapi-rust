@@ -9,6 +9,39 @@ Use [`scripts/termux-smoke.sh`](../scripts/termux-smoke.sh) for the automated
 parts, then walk the manual checks below. Record results against a specific
 artifact run (commit SHA + CI run id).
 
+## Recorded on-device result (2026-11-21, commit `006dc3c`, CI run `44896747884`)
+
+Executed over `ssh mi5x` on a real aarch64 Android/Termux device
+(`Linux localhost 3.18.71-perf … aarch64 Android`, uid `u0_a109`, no root,
+`$PREFIX=/data/data/com.termux/files/usr`). The device has **no outbound
+network to GitHub**, so the CI artifact was downloaded to the workstation and
+copied with `scp`; the in-repo build policy is unchanged (release builds are
+CI-only).
+
+- Artifact: `v2rayn-webapi-rs-aarch64-musl` from run `44896747884`. Device
+  SHA-256 `049e2bcd25682c0c0054030bd6cf769895a2a15b894eb7c04a734290990a6df1`
+  matched the workstation byte-for-byte. `readelf -l … | grep INTERP` printed
+  nothing → static ELF.
+- **Step 1 PASS**: the binary `execve`'d natively with no proot/glibc/root.
+  `/api/health` returned `{"status":"ok"}` with all 5 `x-v2rayn-webapi-*`
+  diagnostic headers.
+- **Step 2 PASS**: `scripts/termux-smoke.sh` reported **12 passed, 0 failed**
+  with Nova dist served same-origin: static ELF sanity, execve + health,
+  5 headers, setup/status, wrong-key 401, login token (43 chars), protected
+  401→200, SSE ticket (43 chars), Nova `GET /`, HTML body, path traversal
+  (no file content disclosed).
+- Nova was built locally from the pinned client commit `2ae1ee7` (`oracle.lock`)
+  and its `dist/` copied to `$HOME/nova-dist`; `webui-config.js` ships with
+  `apiBaseUrl: ''` (same-origin), so no config edit was needed. Nova's main JS
+  bundle loads as `200 text/javascript` (770 KB). All GET/auth endpoints Nova
+  needs are served; the remaining 14 paths it references are PUT/POST
+  state-mutating ops (backup, profiles move/export, settings apply/core,
+  web-updates check/update, core geo), intentionally out of scope. They now
+  return a JSON `404 {"code":"not_found",…}` envelope instead of SPA HTML, so
+  Nova fails gracefully rather than choking on an HTML parse.
+- Steps 3–5 (browser UI, wakelock survival, DNS with a real Core) remain manual
+  — they need GUI interaction and a real Core binary, not covered by SSH.
+
 ## 0. Artifact identity
 
 - [ ] Download `v2rayn-webapi-rs-aarch64-musl.zip` from a **successful** CI run.
