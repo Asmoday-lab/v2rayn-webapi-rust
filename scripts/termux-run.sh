@@ -7,9 +7,12 @@
 # Overrides: API_BIN, NOVA_DIST_DIR, V2RAYN_DATA_HOME, ASPNETCORE_URLS.
 set -euo pipefail
 
-api_bin="${API_BIN:-$HOME/bin/v2rayn-webapi-rs}"
-nova_dist="${NOVA_DIST_DIR:-$HOME/v2rayN-WebUI-Nova/dist}"
-data_home="${V2RAYN_DATA_HOME:-$HOME/.v2rayn-webapi-rs}"
+# Resolve defaults relative to this script so the whole folder is relocatable:
+#   ~/v2rayn-nova/{v2rayn-webapi-rs,nova-dist,data,termux-run.sh,...}
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+api_bin="${API_BIN:-$script_dir/v2rayn-webapi-rs}"
+nova_dist="${NOVA_DIST_DIR:-$script_dir/nova-dist}"
+data_home="${V2RAYN_DATA_HOME:-$script_dir/data}"
 bind="${ASPNETCORE_URLS:-http://127.0.0.1:5080}"
 
 if [[ -z "${PREFIX:-}" || ! -d "$PREFIX" ]]; then

@@ -14,8 +14,9 @@
 # Nothing is written outside $TMPDIR; the API is killed on exit.
 set -euo pipefail
 
-api_bin="${API_BIN:-$HOME/bin/v2rayn-webapi-rs}"
-nova_dist="${NOVA_DIST_DIR:-}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+api_bin="${API_BIN:-$script_dir/v2rayn-webapi-rs}"
+nova_dist="${NOVA_DIST_DIR:-$script_dir/nova-dist}"
 port="${SMOKE_PORT:-5090}"
 base="http://127.0.0.1:${port}"
 password="${PASSWORD:-}"
