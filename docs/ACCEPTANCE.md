@@ -42,6 +42,39 @@ CI-only).
 - Steps 3–5 (browser UI, wakelock survival, DNS with a real Core) remain manual
   — they need GUI interaction and a real Core binary, not covered by SSH.
 
+## Recorded result: real backend + nginx aggregation (2026-11-21)
+
+Later builds replaced the no-op shell with a real JSON store, CRUD and Core
+management; the frontend was moved out of the Rust fallback into the existing
+Termux nginx site. Verified over `ssh mi5x` through the nginx aggregation entry
+on port 8080:
+
+- Commits: `83b706a` (persistence/CRUD/Core), `a20d064` (differential parity for
+  `core/stop`), `10e6ad9` (Android seccomp fix, CI run pending at time of
+  writing). Earlier green run `44905219027` produced artifact `14707577794`,
+  SHA-256 `f88e9b247adedcf2cff9852c016dccda5851f7abe62fea24228e077090cd76c5`,
+  `ELF64 / AArch64 / EXEC / INTERP=0`. Differential 59/59 passed in that run.
+- Deployment: binary at `~/v2rayn-nova/v2rayn-webapi-rs`, data home
+  `~/v2rayn-nova/data`, Nova static files at `~/.config/nginx/html/nova/`
+  with `<base href="/nova/">`. nginx serves `/nova/` and reverse-proxies
+  `/api/` to `127.0.0.1:5080` with `proxy_set_header Host $http_host` so the
+  API's same-origin guard accepts the browser request.
+- **PASS**: login → create subscription → create VLESS profile → list profiles
+  → select profile, all through nginx 8080. `data/data.json` was created
+  (16,106 bytes) and contains the written rows. This proves the "backend does
+  nothing" symptom is fixed.
+- **Core start bug found and fixed**: the first real `POST /api/core/start`
+  killed the entire API process with `SIGSYS` (`__NR_pidfd_open`, denied by
+  Android seccomp). `strace -f` showed the child itself exec'd successfully.
+  Commit `10e6ad9` replaces `tokio::process::Command` with raw `posix_spawn`
+  (`src/child_process.rs`); see `TERMUX.md` for the full diagnosis. The new
+  artifact must be deployed before Core start is considered verified.
+- **PASS (pre-fix)**: config generation itself is correct —
+  `data/binConfigs/config.json` contained the expected VLESS outbound,
+  `127.0.0.1:10808` SOCKS inbound and direct fallback, and the spawned
+  `sing-box` process was observed alive.
+- Nova GUI end-to-end button-by-button validation is still outstanding.
+
 ## 0. Artifact identity
 
 - [ ] Download `v2rayn-webapi-rs-aarch64-musl.zip` from a **successful** CI run.
@@ -141,14 +174,16 @@ CI-only).
 
 ## 6. Known out-of-scope (do NOT report as a smoke failure)
 
-- Core process management (Xray/sing-box start/stop/status) is **not
-  implemented**. `POST /api/core/start` returns the oracle's deterministic
-  `409 profile_not_selected`; Nova can browse/manage but cannot establish a
-  proxy connection yet.
-- Real persistence of profiles/subscriptions/settings is **not implemented**;
-  writes are deterministic no-op/error paths. Data does not survive restart.
-- Remote access: the API binds loopback only. WAN access needs an SSH tunnel or
-  reverse proxy; do not expose the plain HTTP listener directly.
+- Core process management (Xray/sing-box start/stop/status) **is implemented**.
+  `POST /api/core/start` generates `binConfigs/config.json` and launches the
+  core. Android seccomp required a raw `posix_spawn` path; see `TERMUX.md`.
+  Which protocol extras are translated into sing-box JSON is still limited.
+- Profiles, subscriptions and settings **persist** in `data/data.json`.
+  Subscription content download, speed/latency tests, backup/WebDAV restore
+  and self-updates remain unimplemented.
+- Remote access: the API binds loopback only. The supported LAN entry is the
+  existing nginx site (`http://<phone-ip>:8080/nova/`); do not expose the plain
+  HTTP listener directly.
 
 ## Reporting a result
 

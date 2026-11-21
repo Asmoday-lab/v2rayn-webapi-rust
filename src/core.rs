@@ -158,12 +158,16 @@ pub fn generate_config(snapshot: &Value) -> Value {
             "type": "socks",
             "tag": "socks-in",
             "listen": "127.0.0.1",
-            "listen_port": local_port,
-            "sniff": true
+            "listen_port": local_port
         }],
         "outbounds": [singbox_outbound(&profile), {"type": "direct", "tag": "direct"}],
         "route": {
-            "rules": [{"outbound": "proxy"}],
+            "rules": [
+                // sing-box 1.11 deprecated inbound `sniff`; since 1.13 it is
+                // removed entirely and must be a route rule action.
+                {"inbound": "socks-in", "action": "sniff"},
+                {"outbound": "proxy"}
+            ],
             "final": "direct"
         }
     })
@@ -319,6 +323,10 @@ mod tests {
         assert_eq!(cfg["outbounds"][0]["type"], "vless");
         assert_eq!(cfg["outbounds"][0]["server"], "v.example");
         assert_eq!(cfg["outbounds"][0]["uuid"], "uuid");
+        // sing-box >=1.13 rejects the deprecated inbound `sniff` field.
+        assert!(cfg["inbounds"][0].get("sniff").is_none());
+        assert_eq!(cfg["route"]["rules"][0]["action"], "sniff");
+        assert_eq!(cfg["route"]["rules"][1]["outbound"], "proxy");
     }
 
     #[test]
